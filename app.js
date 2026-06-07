@@ -161,9 +161,11 @@ function buildTokenInnerHtml(p, pos, ovr, subPid) {
     const subP = players.find(x => x.id === subPid);
     if (subP) subStr = `<div class="token-sub">🔄 ${subP.jersey != null ? subP.jersey + ' ' : ''}${subP.name}</div>`;
   }
+  // 필드 배치 포지션(pos)이 있으면 그 색으로, 없으면 등록 포지션 기준
+  const circleColor = posColor(pos ? [pos] : p.positions);
   return `<div class="token-avatar-wrap">
     ${ovr != null ? tokenStarArcHtml(ovr) : ''}
-    <div class="token-circle" style="background:${posColor(p.positions)}">
+    <div class="token-circle" style="background:${circleColor}">
       ${p.name.slice(0, 2)}
       ${pos ? `<span class="token-pos-badge">${pos}</span>` : ''}
     </div>
@@ -228,8 +230,19 @@ function handleSaveError(e) {
 }
 function normalizeFieldTokens(raw) {
   return (raw || []).map(t => {
-    if (t.slotIdx !== undefined) return t;
-    return { pid: t.pid, slotIdx: -1, freeX: t.x ?? 0.5, freeY: t.y ?? 0.5, pos: t.pos || '' };
+    // 구버전: slotIdx 없음 → {x,y} 좌표 방식
+    if (t.slotIdx === undefined) {
+      return { pid: t.pid, slotIdx: -1, freeX: t.x ?? 0.5, freeY: t.y ?? 0.5, pos: t.pos || '' };
+    }
+    // 현재 버전: pid/slotIdx 있음, 나머지 필드 기본값 보장
+    return {
+      pid: t.pid,
+      slotIdx: t.slotIdx ?? -1,
+      freeX: t.freeX ?? 0.5,
+      freeY: t.freeY ?? 0.5,
+      pos: t.pos || '',
+      ...(t.subPid != null ? { subPid: t.subPid } : {}),
+    };
   });
 }
 function applyRemoteData(data) {
@@ -1004,7 +1017,8 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   const pos = t.pos || p.positions[0] || '';
   const ovr = getOvr(p, pos);
   const r = 18 * sc;
-  const color = posColor(p.positions);
+  // 필드 배치 포지션(t.pos) 기준 색깔 — 없으면 등록 포지션 기준
+  const color = posColor(pos ? [pos] : p.positions);
 
   // 1) OVR 별 아치 — circle top 위에만 위치 (circle과 겹치지 않음)
   if (ovr != null) {
@@ -1247,7 +1261,15 @@ function tokenPos(nx, ny) {
 // ── 필드 렌더 ──
 function renderField() {
   if (document.getElementById('tab-formation')?.classList.contains('active')) {
-    drawFieldCanvas(slotHighlight);
+    // 캔버스 크기는 이미 결정된 fieldSize 기준으로만 슬롯 마커 재그림
+    // (벤치 높이 변화에 의한 크기 재계산 방지 → 경기장 흔들림 없음)
+    if (fieldSize.w && fieldSize.h) {
+      const canvas = document.getElementById('fieldCanvas');
+      drawGrass(canvas);
+      drawFormationSlots(canvas.getContext('2d'), fieldSize.w, fieldSize.h, slotHighlight);
+    } else {
+      drawFieldCanvas(slotHighlight);
+    }
   }
   const td=document.getElementById('tokens');
   td.innerHTML='';
@@ -1320,7 +1342,7 @@ function onGlobalMove(e){
         newEl.className='player-token dragging';
         newEl.dataset.pid=drag.pid;
         newEl.style.left='0px';newEl.style.top='0px';
-        const pos=p.positions[0]||'';
+        const pos=p.positions[0]||''; // 드래그 시작 시 아직 슬롯 미정이므로 등록 포지션 기본값
         const ovr=getOvr(p,pos);
         newEl.innerHTML = buildTokenInnerHtml(p, pos, ovr, null);
         newEl.addEventListener('mousedown',onTokenMouseDown);
@@ -1441,6 +1463,8 @@ function applyFormation(){
     const def=slotDefaultXY(i);
     fieldTokens.push({pid:p.id,slotIdx:i,freeX:def.x,freeY:def.y,pos:bestPosForSlot(p,label)});
   }
+  // 크기 먼저 확정하고 렌더 (자동배치 후 경기장 크기 재계산 방지)
+  drawFieldCanvas(slotHighlight);
   saveFieldState();renderField();
 }
 function clearField(){fieldTokens=[];saveFieldState();renderField();}
@@ -1483,6 +1507,8 @@ function loadSave(id){
   const s=formationSaves.find(x=>x.id===id); if(!s)return;
   fieldTokens=normalizeFieldTokens(s.tokens);
   setFormationSelect(s.formation);
+  // 저장본 불러올 때도 pos·좌표 정규화 (구버전 저장본 호환)
+  if(s.formation) reconcileFieldTokensToFormation();
   drawFieldCanvas();renderField();renderFormationSaves();
   persistField().catch(handleSaveError);
 }
@@ -1831,7 +1857,13 @@ function switchTab(tab){
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
   if(tab==='home')renderHome();
-  if(tab==='formation'){slotHighlight=-1;drawFieldCanvas(-1);renderField();renderFormationSaves();}
+  if(tab==='formation'){
+    slotHighlight=-1;
+    fieldSize={w:0,h:0}; // 탭 전환 시 크기 강제 재측정 (이후 renderField는 고정 크기 유지)
+    drawFieldCanvas(-1);
+    renderField();
+    renderFormationSaves();
+  }
   if(tab==='records')renderRecords();
   if(tab==='stats'){switchStatsSub(statsSubTab);}
 }

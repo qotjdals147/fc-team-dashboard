@@ -1,6 +1,6 @@
 // ── 구글 시트 API 설정 ──
 const SHEET_API = {
-  URL: 'https://script.google.com/macros/s/AKfycbz-jEgsrrbBUiwbqm3fMwzb4UTZtWjjqJDRHcm74fpV-_suIpU-jobPkTsQgVP4DN0Ebw/exec',
+  URL: 'https://script.google.com/macros/s/AKfycbw3rqhMrN6gT2iz51uN6iJP8ay1sIUh_Par2D1BdQEoy61j6yqHm68ILmc-RQNd9OWasg/exec',
   KEY: 'minsoo_fc',
 };
 

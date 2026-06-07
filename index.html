@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>FC 사이트</title>
-<link rel="stylesheet" href="style.css?v=46">
+<link rel="stylesheet" href="style.css?v=49">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
@@ -75,6 +75,13 @@
     <button class="btn-save-field" onclick="saveFormation()"><i class="ti ti-device-floppy"></i> 저장</button>
     <button class="btn-export-field" onclick="exportFormationImage()"><i class="ti ti-photo"></i> 이미지</button>
     <button class="btn-reset-field" onclick="clearField()">초기화</button>
+  </div>
+  <div class="quarter-bar admin-only" id="quarterBar">
+    <span class="quarter-bar-label">&#xCFFC;&#xD130;</span>
+    <button class="quarter-btn" id="q1btn" onclick="switchQuarter(1)">1Q</button>
+    <button class="quarter-btn" id="q2btn" onclick="switchQuarter(2)">2Q</button>
+    <button class="quarter-btn" id="q3btn" onclick="switchQuarter(3)">3Q</button>
+    <button class="quarter-btn" id="q4btn" onclick="switchQuarter(4)">4Q</button>
   </div>
   <div class="formation-saves-panel admin-only" id="formationSavesPanel" style="display:none">
     <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
@@ -284,8 +291,8 @@
     </div>
   </div>
 </div>
-<script src="data.js?v=46"></script>
-<script src="api.js?v=46"></script>
-<script src="app.js?v=46"></script>
+<script src="data.js?v=49"></script>
+<script src="api.js?v=49"></script>
+<script src="app.js?v=49"></script>
 </body>
 </html>

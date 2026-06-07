@@ -146,6 +146,9 @@ let photoTransform = { x: 0, y: 0, scale: 1 };
 let matchParticipants = [];
 let statsSubTab = 'personal';
 let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
+// 쿼터별 필드 상태: quarterData[1~4] = { formation, tokens } | null
+let quarterData = {1:null,2:null,3:null,4:null};
+let activeQuarter = 1;
 
 // 팝업 모드: 'pos' | 'sub'
 let popupMode = 'pos', popupTargetPid = null;
@@ -256,6 +259,47 @@ function reconcileFieldTokensToFormation() {
 }
 function alertFormationRequired() {
   alert('포메이션을 선택해주세요.');
+}
+
+// ── 쿼터 전환 ──
+function switchQuarter(q) {
+  if (q === activeQuarter) return;
+  // 현재 쿼터 상태를 quarterData에 저장
+  quarterData[activeQuarter] = {
+    formation: getFormation(),
+    tokens: JSON.parse(JSON.stringify(fieldTokens))
+  };
+  activeQuarter = q;
+  const qd = quarterData[q];
+  if (qd && (qd.tokens?.length || qd.formation)) {
+    fieldTokens = normalizeFieldTokens(qd.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}));
+    setFormationSelect(qd.formation || '');
+    if (qd.formation) reconcileFieldTokensToFormation();
+  } else {
+    // 빈 쿼터 - 필드 초기화
+    fieldTokens = [];
+    setFormationSelect('');
+  }
+  updateQuarterButtons();
+  drawFieldCanvas();
+  renderField();
+  renderBench();
+}
+function updateQuarterButtons() {
+  for (let q = 1; q <= 4; q++) {
+    const btn = document.getElementById('q'+q+'btn');
+    if (!btn) continue;
+    const isActive = q === activeQuarter;
+    const qTokens = q === activeQuarter ? fieldTokens : (quarterData[q]?.tokens || []);
+    const hasPlayers = qTokens.length > 0;
+    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('has-players', hasPlayers && !isActive);
+  }
+}
+function quarterLabel(quarters) {
+  if (!quarters || !quarters.length) return '';
+  if (quarters.length >= 4) return '(전체)';
+  return '(' + quarters.join(',') + 'Q)';
 }
 
 function tokenXY(t) {
@@ -435,21 +479,53 @@ function applyRemoteData(data) {
     const lt = localStorage.getItem('fc_photo_transform');
     if (lt) try { photoTransform = JSON.parse(lt); } catch(e) {}
   }
-  // formationSaves 내 토큰 포지션도 마이그레이션
-  formationSaves = (data.saves || []).map(sv => ({
-    ...sv,
-    tokens: (sv.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}))
-  }));
-  const field = data.field || {};
-  const tokens = normalizeFieldTokens(field.tokens).map(t => {
-    if (t.pos) t.pos = migratePos(t.pos);
-    return t;
+  // formationSaves 마이그레이션 (구형식 → q1, 포지션 마이그레이션)
+  formationSaves = (data.saves || []).map(sv => {
+    const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
+    if (sv.q1tokens !== undefined) {
+      const migrated = {...sv};
+      for (let q = 1; q <= 4; q++) {
+        migrated['q'+q+'tokens'] = (sv['q'+q+'tokens'] || []).map(migrateT);
+      }
+      return migrated;
+    } else {
+      // 구형식 → q1으로 마이그레이션
+      return {
+        ...sv,
+        q1formation: sv.formation || '',
+        q1tokens: (sv.tokens || []).map(migrateT),
+        q2formation:'', q2tokens:[],
+        q3formation:'', q3tokens:[],
+        q4formation:'', q4tokens:[],
+      };
+    }
   });
-  const formation = resolveFormation(field.formation, tokens);
+  const field = data.field || {};
+  const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
+  if (field.q1tokens !== undefined) {
+    // 신규 쿼터 형식
+    for (let q = 1; q <= 4; q++) {
+      const rawTokens = field['q'+q+'tokens'] || [];
+      quarterData[q] = {
+        formation: field['q'+q+'formation'] || '',
+        tokens: normalizeFieldTokens(rawTokens).map(migrateT)
+      };
+    }
+    activeQuarter = field.activeQuarter || 1;
+  } else {
+    // 구형식: q1으로만 적재
+    const tokens = normalizeFieldTokens(field.tokens || []).map(migrateT);
+    quarterData[1] = { formation: field.formation || '', tokens };
+    quarterData[2] = null; quarterData[3] = null; quarterData[4] = null;
+    activeQuarter = 1;
+  }
+  const qd = quarterData[activeQuarter] || {formation:'', tokens:[]};
+  fieldTokens = qd.tokens;
+  const formation = resolveFormation(qd.formation, fieldTokens);
   if (formation) saveFormationLocal(formation);
   setFormationSelect(formation);
-  fieldTokens = tokens;
   if (formation) reconcileFieldTokensToFormation();
+  updateQuarterButtons();
 }
 async function maybeMigrateLocal(data) {
   const remoteEmpty = !data.players?.length && !data.matches?.length && !data.saves?.length;
@@ -475,10 +551,24 @@ function loadLocalFallback() {
   players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr(migratePlayerPos({...p})));
   matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
   const rawSaves = JSON.parse(localStorage.getItem('fc_saves') || '[]');
-  formationSaves = rawSaves.map(sv => ({
-    ...sv,
-    tokens: (sv.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}))
-  }));
+  formationSaves = rawSaves.map(sv => {
+    const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
+    if (sv.q1tokens !== undefined) {
+      const migrated = {...sv};
+      for (let q = 1; q <= 4; q++) {
+        migrated['q'+q+'tokens'] = (sv['q'+q+'tokens'] || []).map(migrateT);
+      }
+      return migrated;
+    }
+    return {
+      ...sv,
+      q1formation: sv.formation || '',
+      q1tokens: (sv.tokens || []).map(migrateT),
+      q2formation:'', q2tokens:[],
+      q3formation:'', q3tokens:[],
+      q4formation:'', q4tokens:[],
+    };
+  });
   myTeamName = localStorage.getItem('fc_myteam') || '';
   teamPhotoUrl = localStorage.getItem('fc_team_photo') || '';
   loadFieldState();
@@ -532,11 +622,24 @@ async function persistPlayers() {
   await apiSavePartial({ players });
 }
 async function persistField() {
-  const formation = getFormationForSave();
-  if (formation) saveFormationLocal(formation);
-  const payload = { formation, tokens: fieldTokens };
+  // 현재 쿼터 상태를 quarterData에 동기화
+  quarterData[activeQuarter] = {
+    formation: getFormationForSave(),
+    tokens: JSON.parse(JSON.stringify(fieldTokens))
+  };
+  if (quarterData[activeQuarter].formation) saveFormationLocal(quarterData[activeQuarter].formation);
+  const payload = { activeQuarter };
+  for (let q = 1; q <= 4; q++) {
+    const qd = quarterData[q] || {};
+    payload['q'+q+'formation'] = qd.formation || '';
+    payload['q'+q+'tokens'] = qd.tokens || [];
+  }
+  // 하위 호환: q1을 기존 formation/tokens에도 미러링
+  payload.formation = payload.q1formation || payload.q2formation || '';
+  payload.tokens = payload.q1tokens || [];
+  localStorage.setItem('fc_field_quarters', JSON.stringify({quarterData, activeQuarter}));
   localStorage.setItem('fc_field', JSON.stringify(fieldTokens));
-  localStorage.setItem('fc_field_full', JSON.stringify(payload));
+  localStorage.setItem('fc_field_full', JSON.stringify({formation: payload.formation, tokens: fieldTokens}));
   await apiSavePartial({ field: payload });
 }
 async function persistMatches() { await apiSavePartial({ matches }); }
@@ -990,45 +1093,25 @@ function openFieldActionMenu(pid, anchorEl) {
   const onFieldIds = new Set(fieldTokens.map(t => t.pid));
   const benchPlayers = players.filter(x => x.id !== pid && !onFieldIds.has(x.id));
 
-  // 필드 선수 목록 (자리 교체)
-  const fieldRows = fieldTokens
-    .filter(t => t.pid !== pid)
-    .map(t => {
-      const x = players.find(pl => pl.id === t.pid); if (!x) return '';
-      const ovr = getOvr(x, t.pos);
-      const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
-      return `<button class="pos-popup-btn" onclick="selectSwapPlayer(${t.pid})"
-        style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px;width:100%;text-align:left">
-        <span style="font-weight:600;flex:1">${x.jersey != null ? '#' + x.jersey + ' ' : ''}${x.name}</span>
-        <span style="font-size:10px;color:var(--text3)">${t.pos || ''}</span>
-        ${eff != null ? `<span style="font-size:10px;color:var(--text3)">${eff}</span>` : ''}
-      </button>`;
-    }).join('');
-
-  // 벤치 선수 목록 (교체 투입)
+  // 벤치 선수 목록만 (자리 교체 섹션 제거)
   const benchRows = benchPlayers.map(x => {
     const ovr = getBestOvr(x);
     const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
     return `<button class="pos-popup-btn" onclick="benchReplaceWith(${x.id},${pid})"
       style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px;width:100%;text-align:left;background:rgba(34,197,94,0.08)">
       <span style="font-weight:600;flex:1">${x.jersey != null ? '#' + x.jersey + ' ' : ''}${x.name}</span>
-      <span style="font-size:10px;color:#4ade80">↑입</span>
+      <span style="font-size:10px;color:#4ade80">&#x2191;&#xC785;</span>
       ${eff != null ? `<span style="font-size:10px;color:var(--text3)">${eff}</span>` : ''}
     </button>`;
   }).join('');
 
   const grid = document.getElementById('posPopupGrid');
   grid.className = 'pos-popup-grid';
-  let html = '<div style="width:100%;max-height:260px;overflow-y:auto">';
-  if (fieldRows) {
-    html += `<div style="font-size:10px;color:var(--text3);padding:2px 0 4px;font-weight:600">↔ 자리 교체</div>${fieldRows}`;
-  }
+  let html = '<div style="width:100%;max-height:200px;overflow-y:auto">';
   if (benchRows) {
-    if (fieldRows) html += `<div style="height:1px;background:var(--border);margin:6px 0"></div>`;
-    html += `<div style="font-size:10px;color:var(--text3);padding:2px 0 4px;font-weight:600">↑ 벤치 → 교체 투입</div>${benchRows}`;
-  }
-  if (!fieldRows && !benchRows) {
-    html += '<div style="font-size:11px;color:var(--text3)">교체 가능한 선수가 없습니다</div>';
+    html += `<div style="font-size:10px;color:var(--text3);padding:2px 0 4px;font-weight:600">&#x2191; &#xBC24;&#xCE58; &#x2192; &#xAD50;&#xCCB4; &#xD22C;&#xC785;</div>${benchRows}`;
+  } else {
+    html += '<div style="font-size:11px;color:var(--text3);padding:4px 0">&#xAD50;&#xCCB4; &#xAC00;&#xB2A5;&#xD55C; &#xBC88;&#xCE58; &#xC120;&#xC218;&#xAC00; &#xC5C6;&#xC2B5;&#xB2C8;&#xB2E4;</div>';
   }
   html += '</div>';
   grid.innerHTML = html;
@@ -1937,10 +2020,39 @@ function applyFormation(){
   drawFieldCanvas(slotHighlight);
   saveFieldState();renderField();
 }
-function clearField(){fieldTokens=[];saveFieldState();renderField();}
+function clearField(){
+  fieldTokens=[];
+  quarterData[activeQuarter]={formation:getFormation(),tokens:[]};
+  saveFieldState();renderField();
+}
 function saveFieldState(){ persistField().catch(handleSaveError); }
 function loadFieldState(){
   const migrateTokenPos = t => ({...t, pos: migratePos(t.pos || '')});
+  // 1. 쿼터 형식 우선 시도
+  const qRaw = localStorage.getItem('fc_field_quarters');
+  if (qRaw) {
+    try {
+      const o = JSON.parse(qRaw);
+      quarterData = o.quarterData || {1:null,2:null,3:null,4:null};
+      activeQuarter = o.activeQuarter || 1;
+      // 각 쿼터 토큰 마이그레이션
+      for (let q = 1; q <= 4; q++) {
+        if (quarterData[q]?.tokens) {
+          quarterData[q].tokens = normalizeFieldTokens(quarterData[q].tokens).map(migrateTokenPos);
+        }
+      }
+      const qd = quarterData[activeQuarter];
+      if (qd) {
+        fieldTokens = qd.tokens || [];
+        const formation = resolveFormation(qd.formation, fieldTokens);
+        if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
+        if (formation) reconcileFieldTokensToFormation();
+      }
+      updateQuarterButtons();
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  // 2. 구 형식 fc_field_full
   const full = localStorage.getItem('fc_field_full');
   if (full) {
     try {
@@ -1949,15 +2061,20 @@ function loadFieldState(){
       const formation = resolveFormation(o.formation, fieldTokens);
       if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
       if (formation) reconcileFieldTokensToFormation();
+      quarterData[1] = { formation: getFormation(), tokens: JSON.parse(JSON.stringify(fieldTokens)) };
+      updateQuarterButtons();
       return;
     } catch (e) { /* fall through */ }
   }
+  // 3. 구 형식 fc_field
   const s = localStorage.getItem('fc_field');
   if (!s) return;
   fieldTokens = normalizeFieldTokens(JSON.parse(s)).map(migrateTokenPos);
   const formation = resolveFormation(localStorage.getItem('fc_formation'), fieldTokens);
   if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
   if (formation) reconcileFieldTokensToFormation();
+  quarterData[1] = { formation: getFormation(), tokens: JSON.parse(JSON.stringify(fieldTokens)) };
+  updateQuarterButtons();
 }
 
 // ── 포메이션 저장 ──
@@ -1970,17 +2087,43 @@ function closeFsaveModal(){document.getElementById('fsaveModal').classList.remov
 function confirmSaveFormation(){
   const name=document.getElementById('fsaveNameInput').value.trim();
   if(!name){alert('이름을 입력해주세요');return;}
-  formationSaves.unshift({id:Date.now(),name,formation:getFormation(),tokens:JSON.parse(JSON.stringify(fieldTokens)),date:new Date().toLocaleDateString('ko-KR')});
+  // 현재 쿼터 동기화
+  quarterData[activeQuarter]={formation:getFormation(),tokens:JSON.parse(JSON.stringify(fieldTokens))};
+  const save={id:Date.now(),name,date:new Date().toLocaleDateString('ko-KR')};
+  for(let q=1;q<=4;q++){
+    const qd=quarterData[q]||{};
+    save['q'+q+'formation']=qd.formation||'';
+    save['q'+q+'tokens']=JSON.parse(JSON.stringify(qd.tokens||[]));
+  }
+  // 하위 호환
+  save.formation=save.q1formation||'';
+  save.tokens=save.q1tokens||[];
+  formationSaves.unshift(save);
   persistSaves().then(()=>{closeFsaveModal();renderFormationSaves();alert('저장되었습니다!');}).catch(handleSaveError);
 }
 document.getElementById('fsaveModal')?.addEventListener('click',function(e){if(e.target===this)closeFsaveModal();});
 function loadSave(id){
   const s=formationSaves.find(x=>x.id===id); if(!s)return;
-  fieldTokens=normalizeFieldTokens(s.tokens).map(t=>({...t,pos:migratePos(t.pos||'')}));
-  setFormationSelect(s.formation);
-  // 저장본 불러올 때도 pos·좌표 정규화 (구버전 저장본 호환)
-  if(s.formation) reconcileFieldTokensToFormation();
-  drawFieldCanvas();renderField();renderFormationSaves();
+  const migrateT=t=>({...t,pos:migratePos(t.pos||'')});
+  if(s.q1tokens!==undefined){
+    // 신규 4쿼터 형식
+    for(let q=1;q<=4;q++){
+      const tokens=normalizeFieldTokens(s['q'+q+'tokens']||[]).map(migrateT);
+      quarterData[q]={formation:s['q'+q+'formation']||'',tokens};
+    }
+  } else {
+    // 구형식: q1만 채우기
+    const tokens=normalizeFieldTokens(s.tokens||[]).map(migrateT);
+    quarterData[1]={formation:s.formation||'',tokens};
+    for(let q=2;q<=4;q++) quarterData[q]=null;
+  }
+  activeQuarter=1;
+  const qd=quarterData[1]||{formation:'',tokens:[]};
+  fieldTokens=qd.tokens;
+  setFormationSelect(qd.formation||'');
+  if(qd.formation) reconcileFieldTokensToFormation();
+  updateQuarterButtons();
+  drawFieldCanvas();renderField();renderBench();renderFormationSaves();
   persistField().catch(handleSaveError);
 }
 function deleteSave(id){
@@ -1992,15 +2135,22 @@ function renderFormationSaves(){
   const panel=document.getElementById('formationSavesPanel');
   const list=document.getElementById('formationSavesList');
   panel.style.display=formationSaves.length?'block':'none';
-  list.innerHTML=formationSaves.map(s=>`
-    <div class="fsave-item">
+  list.innerHTML=formationSaves.map(s=>{
+    const mainFormation=s.q1formation||s.formation||'';
+    const totalPlayers=[1,2,3,4].reduce((acc,q)=>{
+      const tok=s['q'+q+'tokens']||s.tokens||[];
+      tok.forEach(t=>acc.add(t.pid));return acc;
+    },new Set()).size;
+    const hasMultiQ=[2,3,4].some(q=>(s['q'+q+'tokens']||[]).length>0);
+    return `<div class="fsave-item">
       <div class="fsave-info">
         <div class="fsave-name">${s.name}</div>
-        <div class="fsave-meta">${s.formation} · ${s.tokens.length}명 · ${s.date}</div>
+        <div class="fsave-meta">${mainFormation} · ${totalPlayers}명 · ${s.date}${hasMultiQ?' · 4Q':''}</div>
       </div>
       <button class="btn-fsave-load" onclick="loadSave(${s.id})">불러오기</button>
       <button class="btn-fsave-del" onclick="deleteSave(${s.id})">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── 경기 기록 ──
@@ -2010,13 +2160,35 @@ function participantEntry(pid, pos, type, pairedWith) {
   return {pid,name:p.name,pos:usePos,ovr:getOvr(p,usePos),type:type||'starter',pairedWith:pairedWith||null};
 }
 function buildParticipantsFromField() {
-  const list=[];
-  fieldTokens.forEach(t=>{
-    const e=participantEntry(t.pid,t.pos,'starter');
-    if(e) list.push(e);
-    if(t.subPid){const s=participantEntry(t.subPid,t.pos,'sub',t.pid);if(s) list.push(s);}
-  });
-  return list;
+  // 현재 쿼터 상태 동기화
+  quarterData[activeQuarter] = {
+    formation: getFormation(),
+    tokens: JSON.parse(JSON.stringify(fieldTokens))
+  };
+  const pidMap = {}; // pid -> {type, entry, quarters: Set}
+  for (let q = 1; q <= 4; q++) {
+    const qd = quarterData[q];
+    if (!qd || !qd.tokens || !qd.tokens.length) continue;
+    qd.tokens.forEach(t => {
+      if (players.find(x => x.id === t.pid)) {
+        if (!pidMap[t.pid]) {
+          pidMap[t.pid] = { type:'starter', entry:participantEntry(t.pid,t.pos,'starter'), quarters:new Set() };
+        } else if (pidMap[t.pid].type === 'sub') {
+          pidMap[t.pid].type = 'starter'; // 교체후보에서 승격
+        }
+        pidMap[t.pid].quarters.add(q);
+      }
+      if (t.subPid && players.find(x => x.id === t.subPid)) {
+        if (!pidMap[t.subPid]) {
+          pidMap[t.subPid] = { type:'sub', entry:participantEntry(t.subPid,t.pos,'sub',t.pid), quarters:new Set() };
+        }
+        pidMap[t.subPid].quarters.add(q);
+      }
+    });
+  }
+  return Object.values(pidMap).map(({type,entry,quarters}) => ({
+    ...entry, type, quarters:[...quarters].sort()
+  }));
 }
 function buildParticipantsFromMatch(em) {
   const list=[];
@@ -2029,9 +2201,11 @@ function renderMatchLineupPreview() {
   if(!matchParticipants.length){el.innerHTML='<span style="color:var(--text3)">포메 탭에서 필드에 선수를 배치한 뒤 경기 기록을 열어주세요.<br><small style="font-size:10px">용병은 명단에서 임시 추가 후 필드에 배치하면 됩니다.</small></span>';return;}
   const starters=matchParticipants.filter(x=>x.type!=='sub');
   const subs=matchParticipants.filter(x=>x.type==='sub');
-  el.innerHTML=`선발 ${starters.length}명`+(subs.length?` · 교체 ${subs.length}명`:'')+
-    `<div style="margin-top:4px;font-size:11px">${starters.map(x=>x.name).join(', ')}`+
-    (subs.length?`<br>🔄 ${subs.map(x=>x.name).join(', ')}`:'')+`</div>`;
+  const activeQs = [1,2,3,4].filter(q => {const qd=q===activeQuarter?{tokens:fieldTokens}:quarterData[q]; return qd?.tokens?.length>0;});
+  const qSummary = activeQs.length > 1 ? `<span style="font-size:10px;color:var(--text3);margin-left:4px">(${activeQs.length}쿼터 집계)</span>` : '';
+  el.innerHTML=`총 ${matchParticipants.length}명 (선발 ${starters.length}${subs.length?' · 교체후보 '+subs.length:''})${qSummary}`+
+    `<div style="margin-top:4px;font-size:11px">${starters.map(x=>x.name+quarterLabel(x.quarters)).join(', ')}`+
+    (subs.length?`<br>🔄 ${subs.map(x=>x.name+quarterLabel(x.quarters)).join(', ')}`:'')+`</div>`;
 }
 function renderMatchModalEvents(em) {
   const list=document.getElementById('matchEventList');
@@ -2047,8 +2221,9 @@ function renderMatchModalEvents(em) {
   }]));
   list.innerHTML=matchParticipants.map(x=>{
     const subTag=x.type==='sub'?'<span class="match-part-sub">🔄교체</span>':'';
+    const qTag=x.quarters?.length?`<span class="match-part-quarter">${quarterLabel(x.quarters)}</span>`:'';
     return `<div class="player-event-row">
-      <span class="player-event-name">${x.name}</span>${subTag}
+      <span class="player-event-name">${x.name}</span>${subTag}${qTag}
       <span class="player-event-pos">${x.pos}</span>
       <span class="player-event-ovr">${x.ovr!=null?x.ovr+' '+ovrStarsText(x.ovr):''}</span>
       <span style="font-size:11px;color:var(--text2);margin-left:auto">⚽</span>
@@ -2119,8 +2294,8 @@ function saveMatch(){
     const ev=matchEvents[x.pid]||{goals:0,assists:0};
     return{pid:x.pid,name:x.name,pos:x.pos,ovr:x.ovr,goals:ev.goals,assists:ev.assists};
   }).filter(x=>x.goals>0||x.assists>0);
-  const lineup=matchParticipants.filter(x=>x.type!=='sub').map(({pid,name,pos,ovr})=>({pid,name,pos,ovr}));
-  const subs=matchParticipants.filter(x=>x.type==='sub').map(({pid,name,pos,ovr,pairedWith})=>({pid,name,pos,ovr,pairedWith}));
+  const lineup=matchParticipants.filter(x=>x.type!=='sub').map(({pid,name,pos,ovr,quarters})=>({pid,name,pos,ovr,...(quarters?.length?{quarters}:{})}));
+  const subs=matchParticipants.filter(x=>x.type==='sub').map(({pid,name,pos,ovr,pairedWith,quarters})=>({pid,name,pos,ovr,pairedWith,...(quarters?.length?{quarters}:{})}));
   const momPlayer=matchMom?players.find(p=>p.id===matchMom):null;
   const matchData={
     id:editingMatchId||Date.now(),myTeam,oppTeam,date,homeAway,scoreUs,scoreOpp,
@@ -2152,8 +2327,14 @@ function renderRecords(){
         <span class="match-scorer-ovr">${s.ovr!=null?s.ovr+' '+ovrStarsText(s.ovr):''}</span>
         <span style="margin-left:auto;font-size:11px;color:var(--text2)">골 ${s.goals}${s.assists>0?' · 어시 '+s.assists:''}</span>
       </div>`).join('');
-    const lineupTags=(m.lineup||[]).map(l=>`<span class="match-lineup-tag">${l.name}</span>`).join('');
-    const subTags=(m.subs||[]).map(s=>`<span class="match-lineup-tag sub">🔄${s.name}</span>`).join('');
+    const lineupTags=(m.lineup||[]).map(l=>{
+      const qb=l.quarters&&l.quarters.length<4?`<span style="font-size:9px;opacity:.7">${quarterLabel(l.quarters)}</span>`:'';
+      return `<span class="match-lineup-tag">${l.name}${qb}</span>`;
+    }).join('');
+    const subTags=(m.subs||[]).map(s=>{
+      const qb=s.quarters&&s.quarters.length<4?`<span style="font-size:9px;opacity:.7">${quarterLabel(s.quarters)}</span>`:'';
+      return `<span class="match-lineup-tag sub">🔄${s.name}${qb}</span>`;
+    }).join('');
     const momBadge=m.momName?`<span class="match-mom">🏅 MOM ${m.momName}</span>`:'';
     return `<div class="match-card">
       <div class="match-score-row">

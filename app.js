@@ -172,7 +172,18 @@ function buildTokenInnerHtml(p, pos, ovr, subPid) {
   ${tokenOvrPillHtml(ovr)}${subStr}`;
 }
 function tokenAtSlot(slotIdx, excludePid) {
-  return fieldTokens.find(t => t.slotIdx === slotIdx && t.pid !== excludePid);
+  // 1차: slotIdx 정확히 일치
+  const exact = fieldTokens.find(t => t.slotIdx === slotIdx && t.pid !== excludePid);
+  if (exact) return exact;
+  // 2차: slotIdx가 어긋난 경우 슬롯 중심 좌표 근접 거리로 탐색 (0.03 이내)
+  const slots = getSlots();
+  if (!slots[slotIdx]) return undefined;
+  const [sx, sy] = slots[slotIdx];
+  return fieldTokens.find(t =>
+    t.pid !== excludePid &&
+    typeof t.freeX === 'number' && typeof t.freeY === 'number' &&
+    Math.hypot(t.freeX - sx, t.freeY - sy) < 0.03
+  );
 }
 
 // ── 포지션별 슬롯 수 체크 ──
@@ -1187,11 +1198,13 @@ function applySlotSnap(ft, nearSlot, pid, wasFromBench) {
   const snapY = slots[nearSlot][1];
 
   if (other) {
+    // proximity로 찾은 경우 slotIdx를 nearSlot으로 먼저 동기화
+    other.slotIdx = nearSlot;
     if (wasFromBench) {
       // 벤치→필드: 기존 선수 벤치로 내보내기
       fieldTokens = fieldTokens.filter(t => t.pid !== other.pid);
     } else {
-      // 필드→필드 swap
+      // 필드→필드 swap: ft의 현재 자리로 other 이동
       const prevSlot = ft.slotIdx;
       other.slotIdx = prevSlot;
       other.freeX = prevSlot >= 0 ? slots[prevSlot]?.[0] ?? ft.freeX : ft.freeX;
@@ -1274,10 +1287,7 @@ function onGlobalMove(e){
         drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
         alertFormationRequired(); return;
       }
-      if(fieldTokens.length>=MAX_FIELD){
-        drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
-        alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);return;
-      }
+      // MAX_FIELD 체크는 onGlobalUp(드롭 시점)에서 수행 — 교체 의도 판단 후 차단
       // 드래그 중엔 renderField 호출 안 함 — 토큰 DOM만 직접 생성
       fieldTokens.push({pid:drag.pid,slotIdx:-1,freeX:0.5,freeY:0.5,pos:''});
       drag.fromBench=false;
@@ -1339,6 +1349,12 @@ function onGlobalUp(e){
       }
     } else {
       ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny;
+    }
+    // 벤치→필드 드래그였는데 교체 없이 추가된 경우 MAX_FIELD 초과 차단
+    if (wasFromBench && fieldTokens.length > MAX_FIELD) {
+      fieldTokens = fieldTokens.filter(t => t.pid !== pid);
+      alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);
+      saveFieldState(); renderField(); return;
     }
     saveFieldState();renderField();
   } else {

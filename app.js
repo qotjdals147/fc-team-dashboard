@@ -1162,8 +1162,14 @@ function drawFieldCanvas(highlightSlot) {
   const canvas=document.getElementById('fieldCanvas');
   const wrap=document.getElementById('fieldWrap');
   const RATIO=1.45;
-  const maxW=(wrap.clientWidth||window.innerWidth)-24;
-  const maxH=wrap.clientHeight-8;
+  // clientWidth가 0이면 아직 레이아웃 미완료 → app 너비로 폴백
+  const appW = document.getElementById('app')?.clientWidth || window.innerWidth;
+  const rawW = wrap.clientWidth || appW;
+  const maxW = rawW - 24;
+  // 최대 높이: wrap 실측 OR 뷰포트의 58% 중 작은 값 (모바일 과도한 높이 방지)
+  const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const wrapH = wrap.clientHeight > 60 ? wrap.clientHeight : vpH * 0.65;
+  const maxH = Math.min(wrapH - 8, vpH * 0.58);
   let W=maxW;
   let H=Math.round(W*RATIO);
   if(maxH>120&&H>maxH){H=maxH;W=Math.round(H/RATIO);}
@@ -1637,14 +1643,17 @@ function renderBench(){
     const div=document.createElement('div');
     div.className='bench-player';div.dataset.pid=p.id;
     div.innerHTML=`<div class="dot" style="background:${posColor(p.positions)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${ovr!=null?`<span class="bench-player-ovr">${ovr}</span>`:''}`;
-    div.addEventListener('mousedown',function(e){e.preventDefault();startDrag(p.id,true,e.clientX,e.clientY,this);});
-    div.addEventListener('touchstart',function(e){e.preventDefault();startDrag(p.id,true,e.touches[0].clientX,e.touches[0].clientY,this);},{passive:false});
-    const swapBtn=document.createElement('button');
-    swapBtn.className='btn-bench-swap';swapBtn.dataset.pid=p.id;
-    swapBtn.textContent='🔄';
-    swapBtn.title='출전 교체';
-    swapBtn.onclick=function(e){e.stopPropagation();openBenchReplace(p.id);};
-    wrap.appendChild(div);wrap.appendChild(swapBtn);
+    div.addEventListener('mousedown',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.clientX,e.clientY,this);});
+    div.addEventListener('touchstart',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.touches[0].clientX,e.touches[0].clientY,this);},{passive:false});
+    wrap.appendChild(div);
+    if(isAdmin){
+      const swapBtn=document.createElement('button');
+      swapBtn.className='btn-bench-swap';swapBtn.dataset.pid=p.id;
+      swapBtn.textContent='🔄';
+      swapBtn.title='출전 교체';
+      swapBtn.onclick=function(e){e.stopPropagation();openBenchReplace(p.id);};
+      wrap.appendChild(swapBtn);
+    }
     el.appendChild(wrap);
   });
 }
@@ -2077,10 +2086,15 @@ function switchTab(tab){
   if(tab==='home')renderHome();
   if(tab==='formation'){
     slotHighlight=-1;
-    fieldSize={w:0,h:0}; // 탭 전환 시 크기 강제 재측정 (이후 renderField는 고정 크기 유지)
-    drawFieldCanvas(-1);
-    renderField();
+    fieldSize={w:0,h:0};
     renderFormationSaves();
+    // display:none→flex 전환 후 레이아웃이 확정된 시점에 캔버스 그리기
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        drawFieldCanvas(-1);
+        renderField();
+      });
+    });
   }
   if(tab==='records')renderRecords();
   if(tab==='stats'){switchStatsSub(statsSubTab);}

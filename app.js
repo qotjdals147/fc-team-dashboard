@@ -1276,7 +1276,12 @@ function renderField() {
   document.getElementById('slotInfo').textContent=fieldTokens.length+'/'+MAX_FIELD;
   fieldTokens.forEach(t=>{
     const p=players.find(x=>x.id===t.pid); if(!p) return;
-    const pos=t.pos||p.positions[0]||'';
+    // 슬롯에 배치된 경우 슬롯 라벨 우선, 없으면 t.pos, 최후 등록 포지션
+    const labels=getLabels();
+    const slotLabel=(t.slotIdx>=0&&labels[t.slotIdx])?labels[t.slotIdx]:'';
+    const pos=slotLabel||t.pos||p.positions[0]||'';
+    // pos가 확정됐으면 토큰에도 동기화
+    if(pos&&t.pos!==pos) t.pos=pos;
     const ovr=getOvr(p,pos);
     const {x,y}=tokenXY(t);
     const {left,top}=tokenPos(x,y);

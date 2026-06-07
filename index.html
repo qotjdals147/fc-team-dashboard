@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>⚽ 팀 포메이션 매니저</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+</head>
+<body>
+<div id="app">
+
+<div id="syncBar" class="sync-bar loading"><span id="syncDot" class="sync-dot"></span><span id="syncText">연결 중…</span></div>
+
+<!-- 탭 바 -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
+  <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-topology-star-3"></i>포메이션</button>
+  <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기기록</button>
+</div>
+
+<!-- ── 명단 탭 ── -->
+<div id="tab-roster" class="tab-panel active">
+  <div class="section-header">
+    <h2>선수 명단</h2>
+    <div class="header-btns">
+      <button class="btn-sort" onclick="sortByPosition()"><i class="ti ti-arrows-sort"></i> 포지션순</button>
+      <button class="btn-add" onclick="openAddModal()"><i class="ti ti-plus"></i> 추가</button>
+    </div>
+  </div>
+  <div class="player-list" id="playerList"></div>
+</div>
+
+<!-- ── 포메이션 탭 ── -->
+<div id="tab-formation" class="tab-panel">
+  <div class="formation-toolbar">
+    <label>포메이션</label>
+    <select class="formation-select" id="formationSelect">
+      <option value="4-3-3">4-3-3</option>
+      <option value="4-4-2">4-4-2</option>
+      <option value="4-2-3-1">4-2-3-1</option>
+      <option value="3-4-3">3-4-3</option>
+      <option value="3-5-2">3-5-2</option>
+      <option value="5-3-2">5-3-2</option>
+      <option value="5-4-1">5-4-1</option>
+    </select>
+    <button class="btn-apply" onclick="applyFormation()">자동 배치</button>
+    <button class="btn-save-field" onclick="saveFormation()"><i class="ti ti-device-floppy"></i> 저장</button>
+    <button class="btn-reset-field" onclick="clearField()">초기화</button>
+  </div>
+  <!-- 저장된 포메이션 — 필드 위 -->
+  <div class="formation-saves-panel" id="formationSavesPanel" style="display:none">
+    <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
+    <div class="fsave-list" id="formationSavesList"></div>
+  </div>
+  <div class="field-wrap" id="fieldWrap">
+    <canvas class="field-canvas" id="fieldCanvas"></canvas>
+    <canvas id="snapOverlay"></canvas>
+    <div id="tokens"></div>
+    <div class="slot-info" id="slotInfo">0/11</div>
+  </div>
+  <!-- 벤치 — 필드 아래 -->
+  <div class="bench-section">
+    <div class="bench-title">탭 → 포지션 변경 · 드래그 → 필드 추가 · 벤치 영역으로 드래그 → 벤치</div>
+    <div class="bench-list" id="benchList"></div>
+  </div>
+</div>
+
+<!-- ── 경기기록 탭 ── -->
+<div id="tab-records" class="tab-panel">
+  <div class="records-wrap">
+    <button class="btn-new-record" onclick="openMatchModal()"><i class="ti ti-plus"></i> 경기 결과 기록</button>
+    <div class="records-section-title">경기 결과</div>
+    <div id="recordsContent"></div>
+  </div>
+</div>
+
+</div><!-- /#app -->
+
+<!-- ── 선수 편집 모달 ── -->
+<div class="modal-bg" id="playerModal">
+  <div class="modal">
+    <h3 id="modalTitle">선수 추가</h3>
+    <div class="form-field">
+      <label>이름</label>
+      <input type="text" id="inputName" placeholder="이름 입력" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>등번호</label>
+      <input type="number" id="inputJersey" placeholder="등번호 (예: 10)" min="1" max="99">
+    </div>
+    <div class="form-field">
+      <label>가능한 포지션 (복수 선택 가능)</label>
+      <div class="pos-checkboxes" id="posCheckboxes"></div>
+    </div>
+    <div class="form-field" id="ovrSection" style="display:none">
+      <label>포지션별 OVR (1~100 · 20단위로 별 1개씩 증가)</label>
+      <div class="ovr-section" id="ovrInputs"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save-modal" onclick="savePlayer()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 포지션 변경 팝업 ── -->
+<div class="pos-popup" id="posPopup">
+  <div class="pos-popup-title" id="posPopupTitle">포지션 선택</div>
+  <div class="pos-popup-grid" id="posPopupGrid"></div>
+  <button class="pos-popup-sub" id="posPopupSubBtn" onclick="openSubPopup(popupTargetPid, document.querySelector('.player-token[data-pid=\''+popupTargetPid+'\']'))">👥 자리 변경 · 교체 등록</button>
+  <button class="pos-popup-bench" id="posPopupBenchBtn" onclick="sendToBenchFromPopup()">벤치로 보내기</button>
+  <button class="pos-popup-close" onclick="closePosPopup()">닫기</button>
+</div>
+
+<!-- ── 경기 기록 입력 모달 ── -->
+<div class="modal-bg" id="matchModal">
+  <div class="modal">
+    <h3>경기 결과 기록</h3>
+    <div class="modal-section">
+      <div class="modal-section-title">팀 정보</div>
+      <div class="form-field">
+        <label>우리 팀</label>
+        <input type="text" id="matchMyTeam" placeholder="우리 FC" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label>상대 팀</label>
+        <input type="text" id="matchOppTeam" placeholder="상대 FC" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label>경기 날짜</label>
+        <input type="date" id="matchDate">
+      </div>
+      <div class="form-field">
+        <label>스코어</label>
+        <div class="score-row">
+          <input type="number" id="matchScoreUs" value="0" min="0" max="30">
+          <span>:</span>
+          <input type="number" id="matchScoreOpp" value="0" min="0" max="30">
+        </div>
+      </div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">골 · 어시스트 <span style="font-size:11px;color:var(--text3)">(출전 선수 기준)</span></div>
+      <div id="matchEventList"></div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">🏅 MOM (Man of the Match)</div>
+      <div id="momSelectWrap"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeMatchModal()">취소</button>
+      <button class="btn-save-modal" onclick="saveMatch()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

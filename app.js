@@ -360,10 +360,41 @@ function normalizeFieldTokens(raw) {
     };
   });
 }
+// 구 포지션 → 신 포지션 전체 마이그레이션 테이블
+const POS_MIGRATION_MAP = {
+  'LWB':'LB', 'RWB':'RB',
+  'DF':'CB',
+  'CM':'CDM', 'MF':'CDM',
+  'LM':'LW',  'RM':'RW',
+  'CF':'ST',  'FW':'ST',
+};
+function migratePos(pos) { return POS_MIGRATION_MAP[pos] || pos; }
+
+// 단일 포지션 이름 마이그레이션 (필드 토큰 pos, 세이브 tokens.pos 등)
+function migrateWingback(pos) { return migratePos(pos); }
+
+// 선수 객체 포지션·OVR 키 마이그레이션
+function migratePlayerPos(p) {
+  const rawPos = p.positions || [];
+  const newPos = [...new Set(rawPos.map(migratePos))];
+  const changed = JSON.stringify(newPos) !== JSON.stringify(rawPos);
+  if (!changed) return p;
+  const newOvr = {...(p.ovr || {})};
+  // 구 포지션 OVR 값 → 신 포지션 키로 이전 (신 키가 없을 때만)
+  rawPos.forEach(old => {
+    const neo = migratePos(old);
+    if (neo !== old) {
+      if (newOvr[old] != null && newOvr[neo] == null) newOvr[neo] = newOvr[old];
+      delete newOvr[old];
+    }
+  });
+  return {...p, positions: newPos, ovr: newOvr};
+}
+
 function applyRemoteData(data) {
-  players = (data.players?.length ? data.players : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr({...p}));
+  players = (data.players?.length ? data.players : DEFAULT_PLAYERS.map(p => ({...p})))
+    .map(p => normalizePlayerOvr(migratePlayerPos({...p})));
   matches = data.matches || [];
-  formationSaves = data.saves || [];
   myTeamName = data.meta?.myTeam || '';
   // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
   if (data.meta?.adminPw) localStorage.setItem('fc_admin_pw', data.meta.adminPw);
@@ -376,8 +407,16 @@ function applyRemoteData(data) {
     const lt = localStorage.getItem('fc_photo_transform');
     if (lt) try { photoTransform = JSON.parse(lt); } catch(e) {}
   }
+  // formationSaves 내 토큰 포지션도 마이그레이션
+  formationSaves = (data.saves || []).map(sv => ({
+    ...sv,
+    tokens: (sv.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}))
+  }));
   const field = data.field || {};
-  const tokens = normalizeFieldTokens(field.tokens);
+  const tokens = normalizeFieldTokens(field.tokens).map(t => {
+    if (t.pos) t.pos = migratePos(t.pos);
+    return t;
+  });
   const formation = resolveFormation(field.formation, tokens);
   if (formation) saveFormationLocal(formation);
   setFormationSelect(formation);
@@ -405,9 +444,13 @@ async function maybeMigrateLocal(data) {
 }
 function loadLocalFallback() {
   const s = localStorage.getItem('fc_players');
-  players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr({...p}));
+  players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr(migratePlayerPos({...p})));
   matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
-  formationSaves = JSON.parse(localStorage.getItem('fc_saves') || '[]');
+  const rawSaves = JSON.parse(localStorage.getItem('fc_saves') || '[]');
+  formationSaves = rawSaves.map(sv => ({
+    ...sv,
+    tokens: (sv.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}))
+  }));
   myTeamName = localStorage.getItem('fc_myteam') || '';
   teamPhotoUrl = localStorage.getItem('fc_team_photo') || '';
   loadFieldState();
@@ -1756,11 +1799,12 @@ function applyFormation(){
 function clearField(){fieldTokens=[];saveFieldState();renderField();}
 function saveFieldState(){ persistField().catch(handleSaveError); }
 function loadFieldState(){
+  const migrateTokenPos = t => ({...t, pos: migratePos(t.pos || '')});
   const full = localStorage.getItem('fc_field_full');
   if (full) {
     try {
       const o = JSON.parse(full);
-      fieldTokens = normalizeFieldTokens(o.tokens);
+      fieldTokens = normalizeFieldTokens(o.tokens).map(migrateTokenPos);
       const formation = resolveFormation(o.formation, fieldTokens);
       if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
       if (formation) reconcileFieldTokensToFormation();
@@ -1769,7 +1813,7 @@ function loadFieldState(){
   }
   const s = localStorage.getItem('fc_field');
   if (!s) return;
-  fieldTokens = normalizeFieldTokens(JSON.parse(s));
+  fieldTokens = normalizeFieldTokens(JSON.parse(s)).map(migrateTokenPos);
   const formation = resolveFormation(localStorage.getItem('fc_formation'), fieldTokens);
   if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
   if (formation) reconcileFieldTokensToFormation();

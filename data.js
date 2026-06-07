@@ -1,18 +1,26 @@
-const ALL_POS = ['GK','CB','DF','LB','RB','LWB','RWB','CDM','CM','CAM','MF','LW','RW','CF','ST','FW'];
+// 최종 포지션: GK / 수비(CB LB RB) / 미드(CDM CAM) / 공격(LW RW ST)
+const ALL_POS = ['GK','CB','LB','RB','CDM','CAM','LW','RW','ST'];
 
 const POS_BG = {
   GK:'#185FA5',
-  CB:'#3B6D11', DF:'#3B6D11', LB:'#3B6D11', RB:'#3B6D11', LWB:'#3B6D11', RWB:'#3B6D11',
-  CDM:'#BA7517', CM:'#BA7517', CAM:'#BA7517', MF:'#BA7517',
-  LW:'#D85A30', RW:'#D85A30', CF:'#D85A30', ST:'#D85A30', FW:'#D85A30'
+  CB:'#3B6D11', LB:'#3B6D11', RB:'#3B6D11',
+  CDM:'#BA7517', CAM:'#BA7517',
+  LW:'#D85A30', RW:'#D85A30', ST:'#D85A30',
+  // 구 포지션 색상 (하위 호환 - 마이그레이션 전 렌더링 대비)
+  DF:'#3B6D11', LWB:'#3B6D11', RWB:'#3B6D11',
+  CM:'#BA7517', MF:'#BA7517',
+  CF:'#D85A30', FW:'#D85A30', LM:'#D85A30', RM:'#D85A30',
 };
 const POS_LAYER = {
-  GK:0, CB:1, DF:1, LB:1, RB:1, LWB:1.5, RWB:1.5,
-  CDM:2, CM:3, CAM:4, MF:3, LW:5, RW:5, CF:6, ST:6, FW:6
+  GK:0, CB:1, LB:1, RB:1,
+  CDM:2, CAM:4,
+  LW:5, RW:5, ST:6,
 };
 function posClass(p) {
-  return {GK:'gk',CB:'def',DF:'def',LB:'def',RB:'def',LWB:'def',RWB:'def',
-          CDM:'mid',CM:'mid',CAM:'mid',MF:'mid',LW:'fwd',RW:'fwd',CF:'fwd',ST:'fwd',FW:'fwd'}[p]||'';
+  return {GK:'gk',
+          CB:'def',LB:'def',RB:'def',DF:'def',LWB:'def',RWB:'def',
+          CDM:'mid',CAM:'mid',CM:'mid',MF:'mid',
+          LW:'fwd',RW:'fwd',ST:'fwd',CF:'fwd',FW:'fwd',LM:'fwd',RM:'fwd'}[p]||'';
 }
 function posColor(positions) { return POS_BG[positions&&positions[0]] || '#6b6b68'; }
 
@@ -29,26 +37,33 @@ const FORMATIONS = {
 };
 
 const FORMATION_POS_LABELS = {
-  '4-3-3':   ['GK','LB','CB','CB','RB','CM','CM','CM','LW','ST','RW'],
-  '4-4-2':   ['GK','LB','CB','CB','RB','LM','CM','CM','RM','ST','ST'],
+  '4-3-3':   ['GK','LB','CB','CB','RB','CDM','CAM','CAM','LW','ST','RW'],
+  '4-4-2':   ['GK','LB','CB','CB','RB','LW','CDM','CDM','RW','ST','ST'],
   '4-2-3-1': ['GK','LB','CB','CB','RB','CDM','CDM','LW','CAM','RW','ST'],
-  '3-4-3':   ['GK','CB','CB','CB','LM','CM','CM','RM','LW','ST','RW'],
-  '3-5-2':   ['GK','CB','CB','CB','LWB','CDM','CM','CDM','RWB','ST','ST'],
-  '5-3-2':   ['GK','LWB','CB','CB','CB','RWB','CM','CM','CM','ST','ST'],
-  '5-4-1':   ['GK','LWB','CB','CB','CB','RWB','LM','CM','CM','RM','CF']
+  '3-4-3':   ['GK','CB','CB','CB','CAM','CDM','CDM','CAM','LW','ST','RW'],
+  '3-5-2':   ['GK','CB','CB','CB','LB','CDM','CAM','CDM','RB','ST','ST'],
+  '5-3-2':   ['GK','LB','CB','CB','CB','RB','CDM','CAM','CDM','ST','ST'],
+  '5-4-1':   ['GK','LB','CB','CB','CB','RB','LW','CDM','CDM','RW','ST']
 };
 
 const SLOT_LABEL_MATCH = {
+  // ── 현행 포지션 ──
   'GK' :['GK'],
-  'CB' :['CB','DF'], 'DF':['DF','CB'],
-  'LB' :['LB','LWB'], 'RB':['RB','RWB'],
-  'LWB':['LWB','LB'], 'RWB':['RWB','RB'],
-  'LM' :['LW','LWB','LB'], 'RM':['RW','RWB','RB'],
-  'CDM':['CDM','CM','MF'], 'CM':['CM','CDM','CAM','MF'],
-  'CAM':['CAM','CM','MF'], 'MF':['MF','CM','CAM','CDM'],
-  'LW' :['LW','LWB','CF','ST','FW'], 'RW':['RW','RWB','CF','ST','FW'],
-  'CF' :['CF','ST','FW','LW','RW'],
-  'ST' :['ST','CF','FW','LW','RW'], 'FW':['FW','ST','CF']
+  'CB' :['CB','LB','RB'],
+  'LB' :['LB','CB'],
+  'RB' :['RB','CB'],
+  'CDM':['CDM','CAM'],
+  'CAM':['CAM','CDM'],
+  'LW' :['LW','ST','RW'],
+  'RW' :['RW','ST','LW'],
+  'ST' :['ST','LW','RW'],
+  // ── 구 포지션 하위 호환 (기존 저장 데이터에 남아있을 수 있음) ──
+  'DF' :['CB','LB','RB','DF'],
+  'LWB':['LB','LWB','CB'],  'RWB':['RB','RWB','CB'],
+  'CM' :['CDM','CAM','CM','MF'],
+  'MF' :['CDM','CAM','MF','CM'],
+  'LM' :['LW','LM','LB'],  'RM' :['RW','RM','RB'],
+  'CF' :['ST','CF','LW','RW'],  'FW' :['ST','FW','CF'],
 };
 
 // 슬롯 스냅 인식 반경 (플레이 영역 0~1 기준). 작을수록 미세 조정하기 쉬움
@@ -77,19 +92,37 @@ function ovrStarTier(ovr) {
   if (n >= 1) return 'tier-1';
   return '';
 }
-function getOvr(p,pos) {
-  if(!p.positions?.length)return null;
-  if(!p.ovr)p.ovr={};
-  if(pos&&p.ovr[pos]!=null)return p.ovr[pos];
-  const first=pos||p.positions[0];
-  if(p.ovr[first]!=null)return p.ovr[first];
-  return p.positions.length?50:null;
+function getOvr(p, pos) {
+  if (!p.positions?.length) return null;
+  if (!p.ovr) p.ovr = {};
+  // 1. 정확히 일치하는 포지션 OVR
+  if (pos && p.ovr[pos] != null) return p.ovr[pos];
+  // 2. 슬롯이 수용하는 선수 포지션 중 최고 OVR (예: CM 슬롯 → CAM OVR 인식)
+  if (pos) {
+    const acceptable = SLOT_LABEL_MATCH[pos] || [];
+    const matchOvrs = p.positions
+      .filter(pp => acceptable.includes(pp))
+      .map(pp => p.ovr[pp] ?? 50);
+    if (matchOvrs.length) return Math.max(...matchOvrs);
+    // 3. 반대로 선수 포지션의 매핑이 이 슬롯을 포함하는 경우 (예: CAM 선수 → MF 슬롯)
+    for (const pp of p.positions) {
+      if ((SLOT_LABEL_MATCH[pp] || []).includes(pos)) return p.ovr[pp] ?? 50;
+    }
+  }
+  // 4. 최종 폴백: 선수의 주포 OVR
+  const first = p.positions[0];
+  return p.ovr[first] ?? 50;
 }
+// getBestOvr: 주포(x1.0) 부포(x0.75)만 반영, 3번째 이후 포지션은 OVR에 영향 없음
 function getBestOvr(p) {
-  if(!p.positions?.length)return null;
-  if(!p.ovr)p.ovr={};
-  const vals=p.positions.map(pos=>p.ovr[pos]!=null?p.ovr[pos]:50);
-  return vals.length?Math.max(...vals):null;
+  if (!p.positions?.length) return null;
+  if (!p.ovr) p.ovr = {};
+  const pos0 = p.positions[0];
+  const pos1 = p.positions[1];
+  const ovr0 = p.ovr[pos0] ?? 50;
+  if (!pos1) return ovr0;
+  const ovr1 = p.ovr[pos1] ?? 50;
+  return Math.round((ovr0 * 1.0 + ovr1 * 0.75) / 1.75);
 }
 function normalizePlayerOvr(p) {
   if(!p.positions?.length)return p;
@@ -99,23 +132,23 @@ function normalizePlayerOvr(p) {
 }
 
 const DEFAULT_PLAYERS = [
-  {id:1,  name:'경표', jersey:7,  positions:['LW','RW'],           ovr:{}},
-  {id:2,  name:'승규', jersey:5,  positions:['CB','CDM','ST'],      ovr:{}},
-  {id:3,  name:'인수', jersey:8,  positions:['MF'],                 ovr:{}},
-  {id:4,  name:'주용', jersey:6,  positions:['MF','CB'],            ovr:{}},
-  {id:5,  name:'승지', jersey:4,  positions:['MF','CB'],            ovr:{}},
-  {id:6,  name:'청재', jersey:9,  positions:['ST','LW','RW'],       ovr:{}},
-  {id:7,  name:'종민', jersey:3,  positions:['CB'],                 ovr:{}},
-  {id:8,  name:'성진', jersey:10, positions:['CAM','MF'],           ovr:{}},
-  {id:9,  name:'인성', jersey:2,  positions:['CB','CDM'],           ovr:{}},
-  {id:10, name:'성준', jersey:1,  positions:['GK','ST'],            ovr:{}},
-  {id:11, name:'용민', jersey:11, positions:['LB','RB'],            ovr:{}},
-  {id:12, name:'미수', jersey:12, positions:['RW','LW','LB','MF'],  ovr:{}},
-  {id:13, name:'지원', jersey:13, positions:['LW','RW','LB','RB'],  ovr:{}},
-  {id:14, name:'철민', jersey:21, positions:['GK'],                 ovr:{}},
-  {id:15, name:'진우', jersey:14, positions:['MF'],                 ovr:{}},
-  {id:16, name:'승위', jersey:16, positions:[],                     ovr:{}},
-  {id:17, name:'지환', jersey:17, positions:['MF','FW'],            ovr:{}}
+  {id:1,  name:'경표', jersey:7,  positions:['LW','RW'],            ovr:{}},
+  {id:2,  name:'승규', jersey:5,  positions:['CB','CDM','ST'],       ovr:{}},
+  {id:3,  name:'인수', jersey:8,  positions:['CDM'],                 ovr:{}},
+  {id:4,  name:'주용', jersey:6,  positions:['CDM','CB'],            ovr:{}},
+  {id:5,  name:'승지', jersey:4,  positions:['CDM','CB'],            ovr:{}},
+  {id:6,  name:'청재', jersey:9,  positions:['ST','LW','RW'],        ovr:{}},
+  {id:7,  name:'종민', jersey:3,  positions:['CB'],                  ovr:{}},
+  {id:8,  name:'성진', jersey:10, positions:['CAM','CDM'],           ovr:{}},
+  {id:9,  name:'인성', jersey:2,  positions:['CB','CDM'],            ovr:{}},
+  {id:10, name:'성준', jersey:1,  positions:['GK','ST'],             ovr:{}},
+  {id:11, name:'용민', jersey:11, positions:['LB','RB'],             ovr:{}},
+  {id:12, name:'미수', jersey:12, positions:['RW','LW','LB','CDM'],  ovr:{}},
+  {id:13, name:'지원', jersey:13, positions:['LW','RW','LB','RB'],   ovr:{}},
+  {id:14, name:'철민', jersey:21, positions:['GK'],                  ovr:{}},
+  {id:15, name:'진우', jersey:14, positions:['CDM'],                 ovr:{}},
+  {id:16, name:'승위', jersey:16, positions:[],                      ovr:{}},
+  {id:17, name:'지환', jersey:17, positions:['CDM','ST'],            ovr:{}}
 ];
 
 // ── 통계 집계 (matches 배열 기준, 클라이언트 계산) ──

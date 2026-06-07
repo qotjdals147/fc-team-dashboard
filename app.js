@@ -1370,23 +1370,43 @@ function drawFieldCanvas(highlightSlot) {
   const canvas=document.getElementById('fieldCanvas');
   const wrap=document.getElementById('fieldWrap');
   const RATIO=1.45;
-  // clientWidth가 0이면 아직 레이아웃 미완료 → app 너비로 폴백
-  const appW = document.getElementById('app')?.clientWidth || window.innerWidth;
-  const rawW = wrap.clientWidth || appW;
-  const maxW = rawW - 24;
-  // 최대 높이: wrap 실측 OR 뷰포트의 58% 중 작은 값 (모바일 과도한 높이 방지)
   const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-  const wrapH = wrap.clientHeight > 60 ? wrap.clientHeight : vpH * 0.65;
-  const maxH = Math.min(wrapH - 8, vpH * 0.58);
-  let W=maxW;
-  let H=Math.round(W*RATIO);
-  if(maxH>120&&H>maxH){H=maxH;W=Math.round(H/RATIO);}
-  W=Math.max(200,W); H=Math.round(W*RATIO);
+  const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+
+  let W, H;
+  if (presentMode) {
+    // 발표 모드: 뷰포트 기준으로 최대한 크게 (present-bar ~36px, bench-strip ~64px 제외)
+    const presentBarH = 36;
+    const benchH = 64;
+    const availH = vpH - presentBarH - benchH - 12;
+    const availW = vpW - 24;
+    H = Math.min(availH, Math.round(availW * RATIO));
+    W = Math.round(H / RATIO);
+    if (W > availW) { W = availW; H = Math.round(W * RATIO); }
+    W = Math.max(240, W);
+    H = Math.round(W * RATIO);
+  } else {
+    // 일반 모드
+    const appW = document.getElementById('app')?.clientWidth || vpW;
+    const rawW = wrap.clientWidth || appW;
+    const maxW = rawW - 24;
+    const wrapH = wrap.clientHeight > 60 ? wrap.clientHeight : vpH * 0.65;
+    const maxH = Math.min(wrapH - 8, vpH * 0.58);
+    W = maxW;
+    H = Math.round(W * RATIO);
+    if (maxH > 120 && H > maxH) { H = maxH; W = Math.round(H / RATIO); }
+    W = Math.max(200, W);
+    H = Math.round(W * RATIO);
+  }
+
   canvas.width=W; canvas.height=H;
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   fieldSize={w:W,h:H};
-  // 토큰 UI 스케일: 340px 기준, 모바일 소형 캔버스에서 비례 축소
-  const tkScale = Math.min(1, Math.max(0.6, W / 340));
+
+  // 토큰 UI 스케일: 340px 기준, 발표 모드에서는 상한 없이 확대 허용
+  const tkScale = presentMode
+    ? Math.max(0.6, W / 340)
+    : Math.min(1, Math.max(0.6, W / 340));
   document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
   drawGrass(canvas);
   drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);

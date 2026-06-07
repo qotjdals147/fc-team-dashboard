@@ -348,8 +348,8 @@ function normalizePhotoUrl(url) {
   const fileId = u.match(/\/file\/d\/([^/?]+)/)?.[1]
     || (u.includes('drive.google.com') && u.match(/[?&]id=([^&]+)/)?.[1]);
   if (fileId) {
-    // thumbnail URL: 2023년 이후 가장 안정적인 직접 표시 방법
-    return `https://lh3.googleusercontent.com/d/${fileId}`;
+    // Google Drive thumbnail API: 공유 설정 무관하게 가장 안정적으로 로드됨
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`;
   }
   // OneDrive / Windows 공유 링크 → 직접 표시 불가
   if (/onedrive\.live\.com|1drv\.ms|sharepoint\.com/i.test(u)) return '__onedrive__';
@@ -601,11 +601,8 @@ function findBestEmptySlotForPlayer(p) {
   return bestIdx;
 }
 function autoPlaceFromBench(pid) {
-  if (!isFormationSelected()) return false;  // 포메이션 미선택 시 팝업으로 안내
-  if (fieldTokens.length >= MAX_FIELD) {
-    alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);
-    return false;
-  }
+  if (!isFormationSelected()) return false;
+  if (fieldTokens.length >= MAX_FIELD) return false; // 알림은 handlePlayerTap에서 처리
   if (fieldTokens.find(t => t.pid === pid)) return false;
   const p = players.find(x => x.id === pid);
   if (!p) return false;
@@ -677,9 +674,15 @@ function openFieldPosGrid(pid) {
 }
 function handlePlayerTap(pid, anchorEl, fromBench) {
   if (fromBench) {
+    if (!isFormationSelected()) { alertFormationRequired(); return; }
+    // 필드 꽉 찼으면 → 교체 팝업 (포지션 팝업 X)
+    if (fieldTokens.length >= MAX_FIELD) {
+      openBenchReplace(pid);
+      return;
+    }
     if (autoPlaceFromBench(pid)) return;
     const p = players.find(x => x.id === pid);
-    if (isFormationSelected() && fieldTokens.length < MAX_FIELD && p && findBestEmptySlotForPlayer(p) < 0) {
+    if (p && findBestEmptySlotForPlayer(p) < 0) {
       alert('맞는 빈 자리가 없습니다. 포지션을 직접 선택해주세요.');
     }
     openBenchPosMenu(pid, anchorEl);
@@ -1290,12 +1293,12 @@ function renderField() {
   document.getElementById('slotInfo').textContent=fieldTokens.length+'/'+MAX_FIELD;
   fieldTokens.forEach(t=>{
     const p=players.find(x=>x.id===t.pid); if(!p) return;
-    // 슬롯에 배치된 경우 슬롯 라벨 우선, 없으면 t.pos, 최후 등록 포지션
+    // t.pos 우선 (사용자가 명시적으로 지정한 포지션)
+    // t.pos 없으면 슬롯 라벨로 채움 (초기 로드·자동배치 등)
     const labels=getLabels();
     const slotLabel=(t.slotIdx>=0&&labels[t.slotIdx])?labels[t.slotIdx]:'';
-    const pos=slotLabel||t.pos||p.positions[0]||'';
-    // pos가 확정됐으면 토큰에도 동기화
-    if(pos&&t.pos!==pos) t.pos=pos;
+    if(!t.pos&&slotLabel) t.pos=slotLabel; // 비어있을 때만 슬롯 라벨로 채움
+    const pos=t.pos||slotLabel||p.positions[0]||'';
     const ovr=getOvr(p,pos);
     const {x,y}=tokenXY(t);
     const {left,top}=tokenPos(x,y);

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>우리 FC 팀 매니저</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
@@ -74,6 +74,7 @@
     <button class="btn-export-field" onclick="exportFormationImage()"><i class="ti ti-photo"></i> 이미지</button>
     <button class="btn-reset-field" onclick="clearField()">초기화</button>
   </div>
+  <!-- 저장된 포메이션 패널 -->
   <div class="formation-saves-panel" id="formationSavesPanel" style="display:none">
     <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
     <div class="fsave-list" id="formationSavesList"></div>
@@ -85,6 +86,7 @@
       <div class="slot-info" id="slotInfo">0/11</div>
     </div>
   </div>
+  <!-- 벤치 섹션 아래 -->
   <div class="bench-section">
     <div class="bench-title">탭 → 자동 배치 · 드래그 → 원하는 자리 · 🔄 → 출전 교체</div>
     <div class="bench-list" id="benchList"></div>
@@ -148,6 +150,7 @@
   </div>
 </div>
 
+<!-- 팝업 바깥 클릭 닫기용 오버레이 -->
 <div id="popupOverlay" onclick="closePosPopup()"></div>
 
 <!-- 포지션 선택/변경 팝업 -->
@@ -258,8 +261,8 @@
   </div>
 </div>
 
-<script src="data.js?v=12"></script>
-<script src="api.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="data.js?v=13"></script>
+<script src="api.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

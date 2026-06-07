@@ -597,8 +597,7 @@ function autoPlaceFromBench(pid) {
   const slotIdx = findBestEmptySlotForPlayer(p);
   if (slotIdx < 0) return false;
   const pos = labels[slotIdx];
-  const err = checkSlotCapacity(pos, null);
-  if (err) { alert(err); return false; }
+  // findBestEmptySlotForPlayer가 이미 빈 슬롯만 반환하므로 추가 용량 체크 불필요
   fieldTokens.push({
     pid,
     slotIdx,
@@ -655,9 +654,9 @@ function openFieldPosGrid(pid) {
      <div class="pos-popup-grid-inner">${renderPosPopupGrid(pid)}</div>`;
   hidePosPopupExtras();
   document.getElementById('posPopupSubBtn').style.display = 'block';
-  const popup = document.getElementById('posPopup');
-  popup.classList.add('open', 'wide');
-  document.getElementById('popupOverlay').style.display = 'block';
+  document.getElementById('posPopup').classList.add('wide');
+  const anchorEl = document.querySelector(`.player-token[data-pid="${pid}"]`);
+  _showPopupAt(anchorEl);
 }
 function handlePlayerTap(pid, anchorEl, fromBench) {
   if (fromBench) {
@@ -1001,29 +1000,32 @@ function canvasRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 function drawExportToken(ctx, p, t, cx, cy, sc) {
+  ctx.save(); // 전체 토큰 상태 보호
   const pos = t.pos || p.positions[0] || '';
   const ovr = getOvr(p, pos);
   const r = 18 * sc;
   const color = posColor(p.positions);
-  // OVR 별 아치 — 원 그리기 전에 먼저 그려서 원이 덮어쓰게 함
+
+  // 1) OVR 별 아치 — circle top 위에만 위치 (circle과 겹치지 않음)
   if (ovr != null) {
     const n = ovrStarCount(ovr);
     const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
-    // arcTop(tv=0 최상단) = circle top 에서 28px 위, arcH = 14px → 전체 범위가 circle top 위에 위치
-    const arcW = 54 * sc;
-    const arcTop = cy - r - 28 * sc;
-    const arcH = 14 * sc;
+    const arcW = 48 * sc;
+    // 별 중심 최하단이 circle top(cy - r) 에서 6px 위에 오도록
+    const arcBaseY = cy - r - 6 * sc;
+    const arcH = 16 * sc;
     ctx.font = `${7 * sc}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
     pts.forEach(([l, tv]) => {
       const ax = cx - arcW / 2 + (l / 100) * arcW;
-      const ay = arcTop + (tv / 22) * arcH;
-      ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
+      const ay = arcBaseY - (tv / 22) * arcH; // tv 높을수록 위로
       ctx.fillText('★', ax, ay);
     });
   }
-  // 원(circle) — 별 위에 겹쳐 그려 원 안으로 들어간 별을 가림
+
+  // 2) 원 (circle) — save/restore 로 shadow 격리
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 4 * sc;
@@ -1031,36 +1033,47 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
+  ctx.restore(); // shadow 해제
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,0.75)';
   ctx.lineWidth = 2 * sc;
   ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.restore();
+
+  // 3) 이니셜
   ctx.fillStyle = '#fff';
   ctx.font = `bold ${12 * sc}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(p.name.slice(0, 2), cx, cy);
+
+  // 4) 포지션 뱃지 — circle top 바로 위 (별 아래)
   if (pos) {
     ctx.font = `bold ${8 * sc}px sans-serif`;
     ctx.textAlign = 'center';
     const bw = Math.max(ctx.measureText(pos).width + 8 * sc, 22 * sc);
+    const bh = 12 * sc;
     const bx = cx - bw / 2;
-    const by = cy - r - 10 * sc;
+    const by = cy - r - bh - 2 * sc; // circle top 바로 위
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    canvasRoundRect(ctx, bx, by, bw, 12 * sc, 4 * sc);
+    canvasRoundRect(ctx, bx, by, bw, bh, 4 * sc);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.fillText(pos, cx, by + 6 * sc);
+    ctx.fillText(pos, cx, by + bh / 2);
   }
+
+  // 5) 이름
   const name = `${p.jersey ? p.jersey + ' ' : ''}${p.name}`;
   ctx.font = `600 ${10 * sc}px sans-serif`;
-  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.strokeStyle = 'rgba(0,0,0,0.85)';
   ctx.lineWidth = 3 * sc;
-  ctx.textAlign = 'center';
   ctx.strokeText(name, cx, cy + r + 10 * sc);
+  ctx.fillStyle = '#fff';
   ctx.fillText(name, cx, cy + r + 10 * sc);
+
+  // 6) OVR pill
   if (ovr != null) {
     const n = ovrStarCount(ovr);
     const ovrText = `OVR+ ${Math.round(ovr)}`;
@@ -1073,6 +1086,8 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
     ctx.fillStyle = n >= 5 ? '#ffd700' : '#fff';
     ctx.fillText(ovrText, cx, ovrY);
   }
+
+  // 7) 교체 예정 표시
   if (t.subPid) {
     const subP = players.find(x => x.id === t.subPid);
     if (subP) {

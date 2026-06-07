@@ -1189,7 +1189,7 @@ function findNearestSlot(excludePid,nx,ny){
 /** 슬롯에 스냅 — 슬롯 정중앙으로 고정, 교체 처리 포함
  *  드래그는 용량 체크 없음 (팝업 포지션 선택에서만 체크)
  */
-function applySlotSnap(ft, nearSlot, pid, wasFromBench) {
+function applySlotSnap(ft, nearSlot, pid, wasFromBench, origSlotIdx, origFreeX, origFreeY) {
   const labels = getLabels();
   const slots = getSlots();
   const slotPos = labels[nearSlot] || '';
@@ -1204,11 +1204,13 @@ function applySlotSnap(ft, nearSlot, pid, wasFromBench) {
       // 벤치→필드: 기존 선수 벤치로 내보내기
       fieldTokens = fieldTokens.filter(t => t.pid !== other.pid);
     } else {
-      // 필드→필드 swap: ft의 현재 자리로 other 이동
-      const prevSlot = ft.slotIdx;
+      // 필드→필드 swap: 드래그 전 원래 슬롯 정보 사용 (onGlobalMove가 -1로 리셋하기 전 값)
+      const prevSlot = (origSlotIdx != null && origSlotIdx >= 0) ? origSlotIdx : ft.slotIdx;
+      const prevX = (origSlotIdx != null && origSlotIdx >= 0) ? (slots[origSlotIdx]?.[0] ?? origFreeX) : (origFreeX ?? ft.freeX);
+      const prevY = (origSlotIdx != null && origSlotIdx >= 0) ? (slots[origSlotIdx]?.[1] ?? origFreeY) : (origFreeY ?? ft.freeY);
       other.slotIdx = prevSlot;
-      other.freeX = prevSlot >= 0 ? slots[prevSlot]?.[0] ?? ft.freeX : ft.freeX;
-      other.freeY = prevSlot >= 0 ? slots[prevSlot]?.[1] ?? ft.freeY : ft.freeY;
+      other.freeX = prevX;
+      other.freeY = prevY;
       if (prevSlot >= 0 && labels[prevSlot]) other.pos = labels[prevSlot];
     }
   }
@@ -1262,7 +1264,12 @@ function onTokenTouchStart(e){e.preventDefault();startDrag(parseInt(this.dataset
 function startDrag(pid,fromBench,ex,ey,el){
   if(drag.longPressTimer){clearTimeout(drag.longPressTimer);drag.longPressTimer=null;}
   if(drag.el)drag.el.classList.remove('dragging','snapping');
-  drag={active:false,pid,fromBench,origFromBench:fromBench,startX:ex,startY:ey,moved:false,longPressTimer:null,el};
+  const origToken = fieldTokens.find(t => t.pid === pid);
+  drag={active:false,pid,fromBench,origFromBench:fromBench,
+    origSlotIdx: origToken?.slotIdx ?? -1,
+    origFreeX: origToken?.freeX ?? 0.5,
+    origFreeY: origToken?.freeY ?? 0.5,
+    startX:ex,startY:ey,moved:false,longPressTimer:null,el};
   drag.longPressTimer=setTimeout(()=>{
     drag.active=true;drag.el.classList.add('dragging');
     const { x, y } = tokenXY(fieldTokens.find(t => t.pid === pid) || { slotIdx: -1, freeX: 0.5, freeY: 0.5 });
@@ -1324,7 +1331,7 @@ function onGlobalUp(e){
   if(drag.pid===null)return;
   clearTimeout(drag.longPressTimer);drag.longPressTimer=null;
   const ex=e.clientX, ey=e.clientY;
-  const pid=drag.pid,wasActive=drag.active,wasMoved=drag.moved,wasFromBench=drag.origFromBench,el=drag.el;
+  const pid=drag.pid,wasActive=drag.active,wasMoved=drag.moved,wasFromBench=drag.origFromBench,origSlotIdx=drag.origSlotIdx,origFreeX=drag.origFreeX,origFreeY=drag.origFreeY,el=drag.el;
   drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
   if(el)el.classList.remove('dragging','snapping');
   slotHighlight = -1;
@@ -1344,7 +1351,7 @@ function onGlobalUp(e){
 
     const nearSlot=findNearestSlot(pid,nx,ny);
     if(nearSlot>=0){
-      if (!applySlotSnap(ft, nearSlot, pid, wasFromBench)) {
+      if (!applySlotSnap(ft, nearSlot, pid, wasFromBench, origSlotIdx, origFreeX, origFreeY)) {
         ft.slotIdx=-1; ft.freeX=nx; ft.freeY=ny;
       }
     } else {

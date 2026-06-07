@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>우리 FC 팀 매니저</title>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
 <div id="app">
 
-<div id="syncBar" class="sync-bar admin-only loading"><span id="syncDot" class="sync-dot"></span><span id="syncText">연결 중...</span></div>
+<div id="syncBar" class="sync-bar loading"><span id="syncInfo" class="sync-info admin-only"><span id="syncDot" class="sync-dot"></span><span id="syncText">연결 중...</span></span><button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">🔒</button></div>
 
 <!-- 탭 바 -->
 <div class="tab-bar">
@@ -18,8 +18,7 @@
   <button class="tab-btn" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
   <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-layout-grid"></i>포메</button>
   <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기</button>
-  <button class="tab-btn admin-only" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
-  <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">🔒</button>
+  <button class="tab-btn" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
 </div>
 
 <!-- 홈 탭 패널 -->
@@ -278,8 +277,8 @@
   </div>
 </div>
 
-<script src="data.js?v=24"></script>
-<script src="api.js?v=24"></script>
-<script src="app.js?v=24"></script>
+<script src="data.js?v=25"></script>
+<script src="api.js?v=25"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

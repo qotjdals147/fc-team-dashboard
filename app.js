@@ -1,15 +1,19 @@
 // ── 관리자 모드 ──
 const ADMIN_PW = '0607';
-let isAdmin = sessionStorage.getItem('fc_admin') === '1';
+let isAdmin = false; // 새로고침·재접속 시 항상 비관리자 (비밀번호 재입력 필요)
 
 function applyAdminMode() {
   document.body.classList.toggle('is-admin', isAdmin);
+  // 잠금 버튼 아이콘
   const btn = document.getElementById('adminToggleBtn');
   if (btn) {
     btn.textContent = isAdmin ? '🔓' : '🔒';
     btn.title = isAdmin ? '관리자 모드 해제' : '관리자 모드 진입';
     btn.classList.toggle('active', isAdmin);
   }
+  // 통계 탭 버튼: 비관리자에게 숨김
+  const statsTabBtn = document.getElementById('statsTabBtn');
+  if (statsTabBtn) statsTabBtn.style.display = isAdmin ? '' : 'none';
   // 비관리자가 통계 탭에 있으면 홈으로
   if (!isAdmin && document.getElementById('tab-stats')?.classList.contains('active')) {
     switchTab('home');
@@ -26,7 +30,6 @@ function toggleAdminMode() {
   if (isAdmin) {
     if (!confirm('관리자 모드를 해제하시겠습니까?')) return;
     isAdmin = false;
-    sessionStorage.removeItem('fc_admin');
     applyAdminMode();
   } else {
     openAdminModal();
@@ -48,7 +51,6 @@ function submitAdminPw() {
   const pw = document.getElementById('adminPwInput')?.value ?? '';
   if (pw === ADMIN_PW) {
     isAdmin = true;
-    sessionStorage.setItem('fc_admin', '1');
     closeAdminModal();
     applyAdminMode();
   } else {
@@ -281,6 +283,7 @@ function updateSyncBar(state, msg) {
   const bar = document.getElementById('syncBar');
   const text = document.getElementById('syncText');
   if (!bar) return;
+  // admin-only 클래스가 있는 syncInfo는 건드리지 않고 bar state만 변경
   bar.className = 'sync-bar ' + state;
   if (text) text.textContent = msg;
 }

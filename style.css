@@ -25,6 +25,7 @@ body { font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; backgro
 
 /* ── 동기화 상태 ── */
 .sync-bar { display:flex; align-items:center; gap:6px; padding:5px 12px; font-size:11px; color:var(--text3); background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0; }
+.sync-info { display:flex; align-items:center; gap:6px; }
 .sync-dot { width:7px; height:7px; border-radius:50%; background:var(--text3); flex-shrink:0; }
 .sync-bar.ok .sync-dot { background:#22c55e; }
 .sync-bar.loading .sync-dot, .sync-bar.saving .sync-dot { background:#f59e0b; animation:pulse 1s infinite; }
@@ -71,7 +72,8 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .home-photo-wrap { position:relative; background:var(--bg2); margin:0 0 12px; overflow:hidden; cursor:default; user-select:none; }
 .is-admin .home-photo-wrap { cursor:grab; }
 .is-admin .home-photo-wrap:active { cursor:grabbing; }
-/* 원본 비율 표시 + 브라우저 기본 이미지 드래그 방지 */
+/* 고정 프레임 안에서 원본 비율 이미지 pan/zoom */
+.home-photo-wrap { min-height: 180px; }
 .home-photo { width:100%; display:block; height:auto; will-change:transform; transition:none; pointer-events:none; user-select:none; -webkit-user-drag:none; }
 .home-photo-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:180px; color:var(--text3); font-size:13px; }
 .home-photo-placeholder i { font-size:36px; opacity:0.5; }

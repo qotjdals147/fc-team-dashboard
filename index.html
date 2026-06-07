@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>⚽ 팀 포메이션 매니저</title>
+<title>⚽ FC 팀 매니저</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
@@ -14,13 +14,37 @@
 
 <!-- 탭 바 -->
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
-  <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-topology-star-3"></i>포메이션</button>
-  <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기기록</button>
+  <button class="tab-btn active" onclick="switchTab('home')"><i class="ti ti-home"></i>홈</button>
+  <button class="tab-btn" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
+  <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-layout-grid"></i>포메</button>
+  <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기</button>
+  <button class="tab-btn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
+</div>
+
+<!-- ── 홈 탭 ── -->
+<div id="tab-home" class="tab-panel active">
+  <div class="home-scroll">
+    <div class="home-photo-wrap" id="homePhotoWrap">
+      <img id="homePhoto" class="home-photo" alt="단체 사진" style="display:none">
+      <div id="homePhotoPlaceholder" class="home-photo-placeholder">
+        <i class="ti ti-photo"></i>
+        <span>단체 사진을 등록해주세요</span>
+      </div>
+      <button type="button" class="btn-photo-change" onclick="openPhotoUrlModal()"><i class="ti ti-link"></i> 사진 링크</button>
+    </div>
+    <div class="home-team-row">
+      <h2 class="home-team-name" id="homeTeamName">우리 FC</h2>
+      <button type="button" class="btn-team-edit" onclick="editTeamName()" title="팀명 수정"><i class="ti ti-pencil"></i></button>
+    </div>
+    <div class="home-members">
+      <div class="home-members-title">클럽원 <span id="homeMemberCount"></span></div>
+      <div class="home-member-grid" id="homeMemberGrid"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── 명단 탭 ── -->
-<div id="tab-roster" class="tab-panel active">
+<div id="tab-roster" class="tab-panel">
   <div class="section-header">
     <h2>선수 명단</h2>
     <div class="header-btns">
@@ -46,6 +70,7 @@
     </select>
     <button class="btn-apply" onclick="applyFormation()">자동 배치</button>
     <button class="btn-save-field" onclick="saveFormation()"><i class="ti ti-device-floppy"></i> 저장</button>
+    <button class="btn-export-field" onclick="exportFormationImage()"><i class="ti ti-photo"></i> 이미지</button>
     <button class="btn-reset-field" onclick="clearField()">초기화</button>
   </div>
   <!-- 저장된 포메이션 — 필드 위 -->
@@ -54,16 +79,37 @@
     <div class="fsave-list" id="formationSavesList"></div>
   </div>
   <div class="field-wrap" id="fieldWrap">
-    <canvas class="field-canvas" id="fieldCanvas"></canvas>
-    <canvas id="snapOverlay"></canvas>
-    <div id="tokens"></div>
-    <div class="slot-info" id="slotInfo">0/11</div>
+    <div class="field-inner" id="fieldInner">
+      <canvas class="field-canvas" id="fieldCanvas"></canvas>
+      <canvas id="snapOverlay"></canvas>
+      <div id="tokens"></div>
+      <div class="slot-info" id="slotInfo">0/11</div>
+    </div>
   </div>
   <!-- 벤치 — 필드 아래 -->
   <div class="bench-section">
-    <div class="bench-title">탭 → 포지션 변경 · 드래그 → 필드 추가 · 벤치 영역으로 드래그 → 벤치</div>
+    <div class="bench-title">탭 → 포지션 · 드래그 → 배치 · 🔄 → 출전 교체</div>
     <div class="bench-list" id="benchList"></div>
   </div>
+</div>
+
+<!-- ── 통계 탭 ── -->
+<div id="tab-stats" class="tab-panel">
+  <div class="stats-subnav">
+    <button class="stats-sub-btn active" data-sub="personal" onclick="switchStatsSub('personal')">개인 통계</button>
+    <button class="stats-sub-btn" data-sub="team" onclick="switchStatsSub('team')">팀 기록</button>
+  </div>
+  <div class="stats-toolbar" id="statsToolbar">
+    <select id="statsYearFilter" class="stats-filter" onchange="renderStats()"></select>
+    <select id="statsSortKey" class="stats-filter" onchange="renderStats()">
+      <option value="goals">골 순</option>
+      <option value="assists">어시 순</option>
+      <option value="appearances">출전 순</option>
+      <option value="attendance">참석률 순</option>
+      <option value="mom">MOM 순</option>
+    </select>
+  </div>
+  <div class="stats-scroll" id="statsContent"></div>
 </div>
 
 <!-- ── 경기기록 탭 ── -->
@@ -108,7 +154,8 @@
 <div class="pos-popup" id="posPopup">
   <div class="pos-popup-title" id="posPopupTitle">포지션 선택</div>
   <div class="pos-popup-grid" id="posPopupGrid"></div>
-  <button class="pos-popup-sub" id="posPopupSubBtn" onclick="openSubPopup(popupTargetPid, document.querySelector('.player-token[data-pid=\''+popupTargetPid+'\']'))">👥 자리 변경 · 교체 등록</button>
+  <button class="pos-popup-swap" id="posPopupSwapBtn" onclick="openSwapPopup(popupTargetPid)">↔️ 즉시 교체</button>
+  <button class="pos-popup-sub" id="posPopupSubBtn" onclick="openSubPopup(popupTargetPid)">🔄 교체 예정 등록</button>
   <button class="pos-popup-bench" id="posPopupBenchBtn" onclick="sendToBenchFromPopup()">벤치로 보내기</button>
   <button class="pos-popup-close" onclick="closePosPopup()">닫기</button>
 </div>
@@ -132,6 +179,13 @@
         <input type="date" id="matchDate">
       </div>
       <div class="form-field">
+        <label>홈 / 어웨이</label>
+        <select id="matchHomeAway">
+          <option value="home">홈</option>
+          <option value="away">어웨이</option>
+        </select>
+      </div>
+      <div class="form-field">
         <label>스코어</label>
         <div class="score-row">
           <input type="number" id="matchScoreUs" value="0" min="0" max="30">
@@ -141,7 +195,13 @@
       </div>
     </div>
     <div class="modal-section">
-      <div class="modal-section-title">골 · 어시스트 <span style="font-size:11px;color:var(--text3)">(출전 선수 기준)</span></div>
+      <div class="modal-section-title">출전 선수
+        <button type="button" class="btn-match-sync" onclick="syncMatchFromFormation()">📋 현재 포메이션 반영</button>
+      </div>
+      <div id="matchLineupPreview" class="match-lineup-preview"></div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">골 · 어시스트</div>
       <div id="matchEventList"></div>
     </div>
     <div class="modal-section">
@@ -151,6 +211,49 @@
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeMatchModal()">취소</button>
       <button class="btn-save-modal" onclick="saveMatch()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 통계 히스토리 모달 ── -->
+<div class="modal-bg" id="statHistoryModal">
+  <div class="modal modal-sm">
+    <h3 id="statHistoryTitle">기록 히스토리</h3>
+    <div id="statHistoryList" class="stat-history-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeStatHistory()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 단체 사진 링크 모달 ── -->
+<div class="modal-bg" id="photoUrlModal">
+  <div class="modal modal-sm">
+    <h3>단체 사진 링크</h3>
+    <p class="photo-url-hint">이미지 공유 링크를 붙여넣으세요. (구글 드라이브 · Imgur · GitHub 등)<br>드라이브는 「링크가 있는 모든 사용자」로 공유해야 보입니다.</p>
+    <div class="form-field">
+      <label>이미지 URL</label>
+      <input type="url" id="photoUrlInput" placeholder="https://..." autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" onclick="clearTeamPhoto()">사진 제거</button>
+      <button class="btn-cancel" onclick="closePhotoUrlModal()">취소</button>
+      <button class="btn-save-modal" onclick="saveTeamPhotoUrl()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 포메이션 저장 모달 ── -->
+<div class="modal-bg" id="fsaveModal">
+  <div class="modal modal-sm">
+    <h3>포메이션 저장</h3>
+    <div class="form-field">
+      <label>이름</label>
+      <input type="text" id="fsaveNameInput" placeholder="예: 홈 4-3-3" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeFsaveModal()">취소</button>
+      <button class="btn-save-modal" onclick="confirmSaveFormation()">저장</button>
     </div>
   </div>
 </div>

@@ -71,14 +71,24 @@ function ovrStars(ovr) {
 }
 function ovrStarsText(ovr) { const n=ovrStarCount(ovr); return n>0?'★'.repeat(n):''; }
 function getOvr(p,pos) {
-  if(!p.ovr)return null;
-  if(p.ovr[pos]!=null)return p.ovr[pos];
-  return p.ovr[p.positions[0]]??null;
+  if(!p.positions?.length)return null;
+  if(!p.ovr)p.ovr={};
+  if(pos&&p.ovr[pos]!=null)return p.ovr[pos];
+  const first=pos||p.positions[0];
+  if(p.ovr[first]!=null)return p.ovr[first];
+  return p.positions.length?50:null;
 }
 function getBestOvr(p) {
-  if(!p.ovr||!p.positions.length)return null;
-  const vals=p.positions.map(pos=>p.ovr[pos]).filter(v=>v!=null);
+  if(!p.positions?.length)return null;
+  if(!p.ovr)p.ovr={};
+  const vals=p.positions.map(pos=>p.ovr[pos]!=null?p.ovr[pos]:50);
   return vals.length?Math.max(...vals):null;
+}
+function normalizePlayerOvr(p) {
+  if(!p.positions?.length)return p;
+  if(!p.ovr)p.ovr={};
+  p.positions.forEach(pos=>{if(p.ovr[pos]==null)p.ovr[pos]=50;});
+  return p;
 }
 
 const DEFAULT_PLAYERS = [
@@ -100,3 +110,110 @@ const DEFAULT_PLAYERS = [
   {id:16, name:'승위', jersey:16, positions:[],                     ovr:{}},
   {id:17, name:'지환', jersey:17, positions:['MF','FW'],            ovr:{}}
 ];
+
+// ── 통계 집계 (matches 배열 기준, 클라이언트 계산) ──
+function matchResult(m) {
+  if (m.scoreUs > m.scoreOpp) return 'W';
+  if (m.scoreUs === m.scoreOpp) return 'D';
+  return 'L';
+}
+function matchParticipantPids(m) {
+  const pids = new Set();
+  (m.lineup || []).forEach(l => { if (l.pid != null) pids.add(l.pid); });
+  (m.subs || []).forEach(s => { if (s.pid != null) pids.add(s.pid); });
+  return pids;
+}
+function getMatchYears(matches) {
+  const years = new Set(matches.map(m => m.date?.slice(0, 4)).filter(Boolean));
+  return [...years].sort((a, b) => b - a);
+}
+function filterMatchesByYear(matches, year) {
+  if (!year || year === 'ALL') return matches;
+  return matches.filter(m => m.date && m.date.startsWith(String(year)));
+}
+function filterMatchesByVenue(matches, venue) {
+  if (!venue || venue === 'all') return matches;
+  return matches.filter(m => m.homeAway === venue);
+}
+function computePlayerStats(matches, players) {
+  const total = matches.length;
+  const map = {};
+  players.forEach(p => {
+    map[p.id] = { pid: p.id, name: p.name, jersey: p.jersey, positions: p.positions,
+      appearances: 0, goals: 0, assists: 0, mom: 0, attendance: 0 };
+  });
+  matches.forEach(m => {
+    matchParticipantPids(m).forEach(pid => { if (map[pid]) map[pid].appearances++; });
+    (m.scorers || []).forEach(s => {
+      if (!map[s.pid]) return;
+      map[s.pid].goals += s.goals || 0;
+      map[s.pid].assists += s.assists || 0;
+    });
+    if (m.mom != null && map[m.mom]) map[m.mom].mom++;
+  });
+  return Object.values(map).map(s => ({
+    ...s,
+    attendance: total ? Math.round(s.appearances / total * 100) : 0,
+  }));
+}
+function computeTeamStats(matches) {
+  const n = matches.length;
+  let w = 0, d = 0, l = 0, gf = 0, ga = 0;
+  matches.forEach(m => {
+    gf += m.scoreUs || 0;
+    ga += m.scoreOpp || 0;
+    const r = matchResult(m);
+    if (r === 'W') w++; else if (r === 'D') d++; else l++;
+  });
+  return {
+    played: n, w, d, l, gf, ga,
+    winRate: n ? Math.round(w / n * 100) : 0,
+    gpg: n ? (gf / n).toFixed(1) : '0.0',
+    cpg: n ? (ga / n).toFixed(1) : '0.0',
+  };
+}
+function computeStreaks(matches) {
+  const sorted = [...matches].filter(m => m.date).sort((a, b) => a.date.localeCompare(b.date));
+  const best = {
+    win: { count: 0, from: null, to: null },
+    unbeaten: { count: 0, from: null, to: null },
+    lose: { count: 0, from: null, to: null },
+  };
+  let curWin = 0, winFrom = null;
+  let curUnbeaten = 0, unbeatenFrom = null;
+  let curLose = 0, loseFrom = null;
+  const setBest = (key, count, from, to) => {
+    if (count > best[key].count) best[key] = { count, from, to };
+  };
+  sorted.forEach(m => {
+    const r = matchResult(m);
+    if (r === 'W') {
+      if (!curWin) winFrom = m.date;
+      curWin++;
+      setBest('win', curWin, winFrom, m.date);
+    } else curWin = 0;
+    if (r !== 'L') {
+      if (!curUnbeaten) unbeatenFrom = m.date;
+      curUnbeaten++;
+      setBest('unbeaten', curUnbeaten, unbeatenFrom, m.date);
+    } else curUnbeaten = 0;
+    if (r === 'L') {
+      if (!curLose) loseFrom = m.date;
+      curLose++;
+      setBest('lose', curLose, loseFrom, m.date);
+    } else curLose = 0;
+  });
+  return best;
+}
+function getPlayerStatHistory(matches, pid, type) {
+  return matches
+    .filter(m => (m.scorers || []).some(s => s.pid === pid && (type === 'goals' ? (s.goals || 0) > 0 : (s.assists || 0) > 0)))
+    .map(m => {
+      const s = m.scorers.find(x => x.pid === pid);
+      return {
+        date: m.date, oppTeam: m.oppTeam, scoreUs: m.scoreUs, scoreOpp: m.scoreOpp,
+        count: type === 'goals' ? (s.goals || 0) : (s.assists || 0),
+      };
+    })
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}

@@ -400,6 +400,8 @@ async function bootstrapApp() {
   });
   // 초기 관리자 모드 적용 (세션 복원 포함)
   applyAdminMode();
+  // 30초마다 자동 갱신 시작
+  startPolling();
 }
 async function persistPlayers() { await apiSavePartial({ players }); }
 async function persistField() {
@@ -1177,6 +1179,9 @@ function drawFieldCanvas(highlightSlot) {
   canvas.width=W; canvas.height=H;
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   fieldSize={w:W,h:H};
+  // 토큰 UI 스케일: 340px 기준, 모바일 소형 캔버스에서 비례 축소
+  const tkScale = Math.min(1, Math.max(0.6, W / 340));
+  document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
   drawGrass(canvas);
   drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);
 }
@@ -2098,6 +2103,51 @@ function switchTab(tab){
   }
   if(tab==='records')renderRecords();
   if(tab==='stats'){switchStatsSub(statsSubTab);}
+}
+
+// ── 30초 자동 갱신 ──
+const POLL_INTERVAL = 30000;
+
+function isAnyModalOpen() {
+  // .modal-bg.open 또는 posPopup.open 여부 확인
+  return !!(document.querySelector('.modal-bg.open') || document.getElementById('posPopup')?.classList.contains('open'));
+}
+
+function refreshCurrentTab() {
+  const tabIds = ['home','roster','formation','records','stats'];
+  for (const t of tabIds) {
+    if (!document.getElementById('tab-' + t)?.classList.contains('active')) continue;
+    if (t === 'home') { renderHome(); }
+    else if (t === 'roster') { renderRoster(); }
+    else if (t === 'formation') {
+      // 포메이션 탭은 캔버스 크기 유지하면서 토큰만 갱신
+      renderField();
+      renderFormationSaves();
+    }
+    else if (t === 'records') { renderRecords(); }
+    else if (t === 'stats') { switchStatsSub(statsSubTab); }
+    break;
+  }
+}
+
+async function pollRefresh() {
+  // 모달 열려있거나 드래그 중이면 이번 주기 스킵
+  if (isAnyModalOpen() || drag.active) return;
+  try {
+    // 폴링은 sync bar에 "로딩 중" 표시 없이 조용히 백그라운드 fetch
+    const res = await fetch(`${SHEET_API.URL}?key=${encodeURIComponent(SHEET_API.KEY)}`);
+    const json = await res.json();
+    if (!json.ok) return;
+    applyRemoteData(json.data);
+    refreshCurrentTab();
+    updateSyncBar('ok', '동기화됨');
+  } catch(e) {
+    // 폴링 실패는 조용히 무시 (사용자에게 alert 없음)
+  }
+}
+
+function startPolling() {
+  setInterval(pollRefresh, POLL_INTERVAL);
 }
 
 // ── 초기화 ──

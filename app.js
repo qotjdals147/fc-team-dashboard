@@ -6,6 +6,7 @@ let players = [], editingId = null, fieldSize = {w:0,h:0};
 let matchEvents = {}, matchMom = null, editingMatchId = null;
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
 let cachedFormation = '';
+let photoTransform = { x: 0, y: 0, scale: 1 };
 let matchParticipants = [];
 let statsSubTab = 'personal';
 let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
@@ -252,6 +253,13 @@ function applyRemoteData(data) {
   myTeamName = data.meta?.myTeam || '';
   teamPhotoUrl = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
+  const savedTransform = data.meta?.teamPhotoTransform;
+  if (savedTransform && typeof savedTransform === 'object') {
+    photoTransform = { x: savedTransform.x || 0, y: savedTransform.y || 0, scale: savedTransform.scale || 1 };
+  } else {
+    const lt = localStorage.getItem('fc_photo_transform');
+    if (lt) try { photoTransform = JSON.parse(lt); } catch(e) {}
+  }
   const field = data.field || {};
   const tokens = normalizeFieldTokens(field.tokens);
   const formation = resolveFormation(field.formation, tokens);
@@ -337,9 +345,10 @@ async function persistField() {
 async function persistMatches() { await apiSavePartial({ matches }); }
 async function persistSaves() { await apiSavePartial({ saves: formationSaves }); }
 async function persistMeta() {
-  await apiSavePartial({ meta: { myTeam: myTeamName, teamPhotoUrl: teamPhotoUrl || '' } });
+  await apiSavePartial({ meta: { myTeam: myTeamName, teamPhotoUrl: teamPhotoUrl || '', teamPhotoTransform: photoTransform } });
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
   else localStorage.removeItem('fc_team_photo');
+  localStorage.setItem('fc_photo_transform', JSON.stringify(photoTransform));
 }
 function normalizePhotoUrl(url) {
   if (!url) return '';
@@ -357,6 +366,89 @@ function normalizePhotoUrl(url) {
 }
 
 // ── 홈 (단체 사진 · 클럽원) ──
+function applyPhotoTransform() {
+  const img = document.getElementById('homePhoto');
+  if (!img) return;
+  img.style.transform = `translate(${photoTransform.x}px, ${photoTransform.y}px) scale(${photoTransform.scale})`;
+  img.style.transformOrigin = 'center center';
+}
+let _photoSaveTimer = null;
+function savePhotoTransform() {
+  clearTimeout(_photoSaveTimer);
+  _photoSaveTimer = setTimeout(() => {
+    persistMeta().catch(handleSaveError);
+  }, 600);
+}
+function resetPhotoTransform() {
+  photoTransform = { x: 0, y: 0, scale: 1 };
+  applyPhotoTransform();
+  persistMeta().catch(handleSaveError);
+}
+function initPhotoDrag() {
+  const wrap = document.getElementById('homePhotoWrap');
+  if (!wrap || wrap._photoDragInit) return;
+  wrap._photoDragInit = true;
+  let pd = { active: false, startX: 0, startY: 0, startTX: 0, startTY: 0 };
+  // 마우스 드래그
+  wrap.addEventListener('mousedown', e => {
+    if (e.target.closest('button')) return;
+    if (!teamPhotoUrl) return;
+    pd = { active: true, startX: e.clientX, startY: e.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
+    wrap.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!pd.active) return;
+    photoTransform.x = pd.startTX + (e.clientX - pd.startX);
+    photoTransform.y = pd.startTY + (e.clientY - pd.startY);
+    applyPhotoTransform();
+  });
+  document.addEventListener('mouseup', () => {
+    if (!pd.active) return;
+    pd.active = false;
+    const w = document.getElementById('homePhotoWrap');
+    if (w) w.style.cursor = '';
+    savePhotoTransform();
+  });
+  // 터치 드래그
+  let pinchDist0 = 0, pinchScale0 = 1;
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      pd = { active: true, startX: t.clientX, startY: t.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
+    } else if (e.touches.length === 2) {
+      pd.active = false;
+      pinchDist0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      pinchScale0 = photoTransform.scale;
+    }
+  }, { passive: true });
+  wrap.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && pd.active) {
+      const t = e.touches[0];
+      photoTransform.x = pd.startTX + (t.clientX - pd.startX);
+      photoTransform.y = pd.startTY + (t.clientY - pd.startY);
+      applyPhotoTransform();
+      e.preventDefault();
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      photoTransform.scale = Math.max(0.3, Math.min(4, pinchScale0 * (dist / pinchDist0)));
+      applyPhotoTransform();
+      e.preventDefault();
+    }
+  }, { passive: false });
+  wrap.addEventListener('touchend', () => {
+    if (pd.active) { pd.active = false; savePhotoTransform(); }
+  });
+  // 마우스 휠 줌
+  wrap.addEventListener('wheel', e => {
+    if (!teamPhotoUrl) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    photoTransform.scale = Math.max(0.3, Math.min(4, photoTransform.scale + delta));
+    applyPhotoTransform();
+    savePhotoTransform();
+  }, { passive: false });
+}
 function renderHome() {
   const nameEl = document.getElementById('homeTeamName');
   if (nameEl) nameEl.textContent = myTeamName || '우리 FC';
@@ -368,11 +460,31 @@ function renderHome() {
       img.style.display = 'block';
       ph.style.display = 'none';
       img.onerror = () => { img.style.display = 'none'; ph.style.display = 'flex'; };
+      applyPhotoTransform();
     } else {
       img.style.display = 'none';
       img.removeAttribute('src');
       ph.style.display = 'flex';
     }
+  }
+  initPhotoDrag();
+  // 초기화 버튼 (사진 있을 때만)
+  const wrap = document.getElementById('homePhotoWrap');
+  let resetBtn = document.getElementById('photoResetBtn');
+  if (wrap && teamPhotoUrl) {
+    if (!resetBtn) {
+      resetBtn = document.createElement('button');
+      resetBtn.id = 'photoResetBtn';
+      resetBtn.type = 'button';
+      resetBtn.className = 'btn-photo-reset';
+      resetBtn.title = '사진 위치/크기 초기화';
+      resetBtn.textContent = '↺';
+      resetBtn.onclick = resetPhotoTransform;
+      wrap.appendChild(resetBtn);
+    }
+    resetBtn.style.display = 'block';
+  } else if (resetBtn) {
+    resetBtn.style.display = 'none';
   }
   const countEl = document.getElementById('homeMemberCount');
   if (countEl) countEl.textContent = `(${players.length}명)`;
@@ -848,11 +960,18 @@ function selectPosFromPopup(pos) {
   savePlayers(); renderRoster();
 
   if(ft) {
-    const slotIdx=findBestSlot(pos, slots, labels, pid);
+    // 1차: 빈 슬롯 탐색
+    let slotIdx=findBestSlot(pos, slots, labels, pid);
+    // 2차: 빈 슬롯 없으면 이미 차 있는 슬롯도 허용 (swap)
+    if(slotIdx<0) {
+      for(let i=0;i<labels.length;i++){
+        if(i!==ft.slotIdx && slotAcceptsPos(labels[i],pos)){slotIdx=i;break;}
+      }
+    }
     if(slotIdx>=0) {
       const other=tokenAtSlot(slotIdx,pid);
       if(other) {
-        // 자리가 차 있으면 서로 swap (드래그와 동일 동작)
+        // 자리 바꿔치기 swap
         other.slotIdx=ft.slotIdx;
         other.freeX=slots[ft.slotIdx]?.[0] ?? ft.freeX;
         other.freeY=slots[ft.slotIdx]?.[1] ?? ft.freeY;

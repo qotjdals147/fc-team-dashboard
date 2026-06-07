@@ -523,7 +523,10 @@ async function bootstrapApp() {
   // 30초마다 자동 갱신 시작
   startPolling();
 }
-async function persistPlayers() { await apiSavePartial({ players }); }
+async function persistPlayers() {
+  localStorage.setItem('fc_players', JSON.stringify(players));
+  await apiSavePartial({ players });
+}
 async function persistField() {
   const formation = getFormationForSave();
   if (formation) saveFormationLocal(formation);
@@ -971,22 +974,69 @@ function openBenchPosMenu(pid, anchorEl) {
   _showPopupAt(anchorEl);
 }
 function openFieldActionMenu(pid, anchorEl) {
-  popupMode = 'field-menu';
+  popupMode = 'swap';
   popupTargetPid = pid;
   const p = players.find(x => x.id === pid);
   if (!p) return;
   anchorEl = anchorEl || document.querySelector(`.player-token[data-pid="${pid}"]`);
   document.getElementById('posPopup').classList.remove('wide');
   document.getElementById('posPopupTitle').textContent =
-    `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}`;
+    `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name} — 교체`;
+
+  const onFieldIds = new Set(fieldTokens.map(t => t.pid));
+  const benchPlayers = players.filter(x => x.id !== pid && !onFieldIds.has(x.id));
+
+  // 필드 선수 목록 (자리 교체)
+  const fieldRows = fieldTokens
+    .filter(t => t.pid !== pid)
+    .map(t => {
+      const x = players.find(pl => pl.id === t.pid); if (!x) return '';
+      const ovr = getOvr(x, t.pos);
+      const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
+      return `<button class="pos-popup-btn" onclick="selectSwapPlayer(${t.pid})"
+        style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px;width:100%;text-align:left">
+        <span style="font-weight:600;flex:1">${x.jersey != null ? '#' + x.jersey + ' ' : ''}${x.name}</span>
+        <span style="font-size:10px;color:var(--text3)">${t.pos || ''}</span>
+        ${eff != null ? `<span style="font-size:10px;color:var(--text3)">${eff}</span>` : ''}
+      </button>`;
+    }).join('');
+
+  // 벤치 선수 목록 (교체 투입)
+  const benchRows = benchPlayers.map(x => {
+    const ovr = getBestOvr(x);
+    const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
+    return `<button class="pos-popup-btn" onclick="benchReplaceWith(${x.id},${pid})"
+      style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px;width:100%;text-align:left;background:rgba(34,197,94,0.08)">
+      <span style="font-weight:600;flex:1">${x.jersey != null ? '#' + x.jersey + ' ' : ''}${x.name}</span>
+      <span style="font-size:10px;color:#4ade80">↑입</span>
+      ${eff != null ? `<span style="font-size:10px;color:var(--text3)">${eff}</span>` : ''}
+    </button>`;
+  }).join('');
+
   const grid = document.getElementById('posPopupGrid');
-  grid.className = 'pos-popup-grid actions';
-  grid.innerHTML = `
-    <button type="button" class="pos-popup-action" onclick="event.stopPropagation();openFieldPosGrid(${pid})">📍 포지션 바꾸기</button>
-    <button type="button" class="pos-popup-action" onclick="event.stopPropagation();openSwapPopup(${pid})">↔️ 다른 선수와 교체</button>
-    <button type="button" class="pos-popup-action pos-popup-action-danger" onclick="event.stopPropagation();sendToBenchFromPopup()">벤치로 보내기</button>
-  `;
-  hidePosPopupExtras();
+  grid.className = 'pos-popup-grid';
+  let html = '<div style="width:100%;max-height:260px;overflow-y:auto">';
+  if (fieldRows) {
+    html += `<div style="font-size:10px;color:var(--text3);padding:2px 0 4px;font-weight:600">↔ 자리 교체</div>${fieldRows}`;
+  }
+  if (benchRows) {
+    if (fieldRows) html += `<div style="height:1px;background:var(--border);margin:6px 0"></div>`;
+    html += `<div style="font-size:10px;color:var(--text3);padding:2px 0 4px;font-weight:600">↑ 벤치 → 교체 투입</div>${benchRows}`;
+  }
+  if (!fieldRows && !benchRows) {
+    html += '<div style="font-size:11px;color:var(--text3)">교체 가능한 선수가 없습니다</div>';
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+
+  // 벤치로 보내기 버튼만 표시
+  document.getElementById('posPopupSwapBtn').style.display = 'none';
+  document.getElementById('posPopupSubBtn').style.display = 'none';
+  const benchBtn = document.getElementById('posPopupBenchBtn');
+  benchBtn.textContent = '벤치로 보내기';
+  benchBtn.onclick = sendToBenchFromPopup;
+  benchBtn.style.display = 'block';
+
   _showPopupAt(anchorEl);
 }
 function openFieldPosGrid(pid) {
@@ -1044,9 +1094,10 @@ function openSubPopup(pid) {
   const rows = bench.map(x => {
     const isSub = ft?.subPid === x.id;
     const ovr = getBestOvr(x);
+    const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
     return `<button class="pos-popup-btn sub-player-btn ${isSub?'active':''}" onclick="selectSubPlayer(${x.id})" style="width:100%;text-align:left;display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px">
       <span style="font-weight:600;flex:1">${x.jersey!=null?'#'+x.jersey+' ':''}${x.name}</span>
-      ${ovr!=null?`<span style="font-size:10px;color:var(--text3)">${ovr}</span>`:''}
+      ${eff!=null?`<span style="font-size:10px;color:var(--text3)">${eff}</span>`:''}
       <span style="font-size:9px;background:var(--bg2);color:var(--text3);padding:1px 5px;border-radius:6px">벤치</span>
     </button>`;
   }).join('');
@@ -1079,10 +1130,11 @@ function openSwapPopup(pid) {
   const rows = others.map(t => {
     const x = players.find(pl=>pl.id===t.pid); if(!x) return '';
     const ovr = getOvr(x, t.pos);
+    const eff = ovr != null ? ovr + (x.formBonus || 0) : null;
     return `<button class="pos-popup-btn" onclick="selectSwapPlayer(${t.pid})" style="width:100%;text-align:left;display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);margin-bottom:3px">
       <span style="font-weight:600;flex:1">${x.jersey!=null?'#'+x.jersey+' ':''}${x.name}</span>
       <span style="font-size:10px;color:var(--text3)">${t.pos||''}</span>
-      ${ovr!=null?`<span style="font-size:10px;color:var(--text3)">${ovr}</span>`:''}
+      ${eff!=null?`<span style="font-size:10px;color:var(--text3)">${eff}</span>`:''}
     </button>`;
   }).join('');
 
@@ -1561,7 +1613,8 @@ async function exportFormationImage() {
     ctx.fillText('벤치', pad, benchY + 10 * sc);
     const labels = bench.map(p => {
       const o = getBestOvr(p);
-      return `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}${o != null ? `(${o})` : ''}`;
+      const eff = o != null ? o + (p.formBonus || 0) : null;
+      return `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}${eff != null ? `(${eff})` : ''}`;
     });
     ctx.fillStyle = '#d0d0cd';
     ctx.font = `${10 * sc}px sans-serif`;
@@ -1792,11 +1845,12 @@ function renderBench(){
   el.innerHTML='';
   bench.forEach(p=>{
     const ovr=getBestOvr(p);
+    const eff=ovr!=null?ovr+(p.formBonus||0):null;
     const wrap=document.createElement('div');
     wrap.className='bench-item';
     const div=document.createElement('div');
     div.className='bench-player';div.dataset.pid=p.id;
-    div.innerHTML=`<div class="dot" style="background:${posColor(p.positions)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${ovr!=null?`<span class="bench-player-ovr">${ovr}</span>`:''}`;
+    div.innerHTML=`<div class="dot" style="background:${posColor(p.positions)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${eff!=null?`<span class="bench-player-ovr">${eff}</span>`:''}`;
     div.addEventListener('mousedown',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.clientX,e.clientY,this);});
     div.addEventListener('touchstart',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.touches[0].clientX,e.touches[0].clientY,this);},{passive:false});
     wrap.appendChild(div);
@@ -1842,7 +1896,7 @@ function applyFormation(){
     if(!p) continue;
     used.add(p.id);
     const def=slotDefaultXY(i);
-    fieldTokens.push({pid:p.id,slotIdx:i,freeX:def.x,freeY:def.y,pos:bestPosForSlot(p,label)});
+    fieldTokens.push({pid:p.id,slotIdx:i,freeX:def.x,freeY:def.y,pos:label||bestPosForSlot(p,label)});
   }
   // 크기 먼저 확정하고 렌더 (자동배치 후 경기장 크기 재계산 방지)
   drawFieldCanvas(slotHighlight);
@@ -1887,7 +1941,7 @@ function confirmSaveFormation(){
 document.getElementById('fsaveModal')?.addEventListener('click',function(e){if(e.target===this)closeFsaveModal();});
 function loadSave(id){
   const s=formationSaves.find(x=>x.id===id); if(!s)return;
-  fieldTokens=normalizeFieldTokens(s.tokens);
+  fieldTokens=normalizeFieldTokens(s.tokens).map(t=>({...t,pos:migratePos(t.pos||'')}));
   setFormationSelect(s.formation);
   // 저장본 불러올 때도 pos·좌표 정규화 (구버전 저장본 호환)
   if(s.formation) reconcileFieldTokensToFormation();

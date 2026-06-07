@@ -1,6 +1,11 @@
 // ── 관리자 모드 ──
-const ADMIN_PW = '0607';
+const ADMIN_PW_DEFAULT = '0607';
 let isAdmin = false; // 새로고침·재접속 시 항상 비관리자 (비밀번호 재입력 필요)
+
+// localStorage 또는 기본값에서 현재 비밀번호 반환
+function getAdminPw() {
+  return localStorage.getItem('fc_admin_pw') || ADMIN_PW_DEFAULT;
+}
 
 function applyAdminMode() {
   document.body.classList.toggle('is-admin', isAdmin);
@@ -28,12 +33,58 @@ function applyAdminMode() {
 
 function toggleAdminMode() {
   if (isAdmin) {
-    if (!confirm('관리자 모드를 해제하시겠습니까?')) return;
-    isAdmin = false;
-    applyAdminMode();
+    openAdminOptionsModal();
   } else {
     openAdminModal();
   }
+}
+
+function openAdminOptionsModal() {
+  document.getElementById('adminOptionsModal').classList.add('open');
+}
+function closeAdminOptionsModal() {
+  document.getElementById('adminOptionsModal').classList.remove('open');
+}
+function exitAdminMode() {
+  closeAdminOptionsModal();
+  isAdmin = false;
+  applyAdminMode();
+}
+
+function openPwChangeModal() {
+  closeAdminOptionsModal();
+  ['pwCurrent','pwNew','pwConfirm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('pwChangeModal').classList.add('open');
+  setTimeout(() => document.getElementById('pwCurrent')?.focus(), 150);
+}
+function closePwChangeModal() {
+  document.getElementById('pwChangeModal').classList.remove('open');
+}
+function submitPwChange() {
+  const current = document.getElementById('pwCurrent')?.value ?? '';
+  const newPw   = document.getElementById('pwNew')?.value ?? '';
+  const confirm = document.getElementById('pwConfirm')?.value ?? '';
+  if (current !== getAdminPw()) {
+    alert('현재 비밀번호가 틀렸습니다');
+    document.getElementById('pwCurrent').value = '';
+    document.getElementById('pwCurrent').focus();
+    return;
+  }
+  if (!newPw) { alert('새 비밀번호를 입력해주세요'); return; }
+  if (newPw !== confirm) { alert('새 비밀번호가 일치하지 않습니다'); document.getElementById('pwConfirm').value = ''; return; }
+  localStorage.setItem('fc_admin_pw', newPw);
+  // Google Sheets에도 동기화 (시트에서 확인 가능)
+  persistMeta().then(() => {
+    closePwChangeModal();
+    alert('비밀번호가 변경되었습니다 ✓');
+  }).catch(() => {
+    // 시트 저장 실패해도 로컬은 이미 변경됨
+    closePwChangeModal();
+    alert('비밀번호가 변경되었습니다 (시트 저장 실패 - 로컬만 반영)');
+  });
 }
 
 function openAdminModal() {
@@ -49,7 +100,7 @@ function closeAdminModal() {
 
 function submitAdminPw() {
   const pw = document.getElementById('adminPwInput')?.value ?? '';
-  if (pw === ADMIN_PW) {
+  if (pw === getAdminPw()) {
     isAdmin = true;
     closeAdminModal();
     applyAdminMode();
@@ -314,6 +365,8 @@ function applyRemoteData(data) {
   matches = data.matches || [];
   formationSaves = data.saves || [];
   myTeamName = data.meta?.myTeam || '';
+  // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
+  if (data.meta?.adminPw) localStorage.setItem('fc_admin_pw', data.meta.adminPw);
   teamPhotoUrl = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
   const savedTransform = data.meta?.teamPhotoTransform;
@@ -415,7 +468,8 @@ async function persistField() {
 async function persistMatches() { await apiSavePartial({ matches }); }
 async function persistSaves() { await apiSavePartial({ saves: formationSaves }); }
 async function persistMeta() {
-  await apiSavePartial({ meta: { myTeam: myTeamName, teamPhotoUrl: teamPhotoUrl || '', teamPhotoTransform: photoTransform } });
+  const adminPw = localStorage.getItem('fc_admin_pw') || undefined;
+  await apiSavePartial({ meta: { myTeam: myTeamName, teamPhotoUrl: teamPhotoUrl || '', teamPhotoTransform: photoTransform, ...(adminPw ? { adminPw } : {}) } });
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
   else localStorage.removeItem('fc_team_photo');
   localStorage.setItem('fc_photo_transform', JSON.stringify(photoTransform));
@@ -2153,6 +2207,8 @@ function startPolling() {
 // ── 초기화 ──
 document.getElementById('matchModal').addEventListener('click',function(e){if(e.target===this)closeMatchModal();});
 document.getElementById('adminModal')?.addEventListener('click',function(e){if(e.target===this)closeAdminModal();});
+document.getElementById('adminOptionsModal')?.addEventListener('click',function(e){if(e.target===this)closeAdminOptionsModal();});
+document.getElementById('pwChangeModal')?.addEventListener('click',function(e){if(e.target===this)closePwChangeModal();});
 document.getElementById('statHistoryModal')?.addEventListener('click',function(e){if(e.target===this)closeStatHistory();});
 document.getElementById('photoUrlModal')?.addEventListener('click',function(e){if(e.target===this)closePhotoUrlModal();});
 bootstrapApp();

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>우리 FC 팀 매니저</title>
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
@@ -230,6 +230,41 @@
   </div>
 </div>
 
+<!-- 관리자 옵션 모달 (해제 / 비밀번호 변경) -->
+<div class="modal-bg" id="adminOptionsModal">
+  <div class="modal modal-sm">
+    <h3>🔓 관리자 메뉴</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+      <button class="btn-save-modal" style="background:#ef4444" onclick="exitAdminMode()">관리자 모드 해제</button>
+      <button class="btn-save-modal" onclick="openPwChangeModal()">🔑 비밀번호 변경</button>
+      <button class="btn-cancel" onclick="closeAdminOptionsModal()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 비밀번호 변경 모달 -->
+<div class="modal-bg" id="pwChangeModal">
+  <div class="modal modal-sm">
+    <h3>🔑 비밀번호 변경</h3>
+    <div class="form-field">
+      <label>현재 비밀번호</label>
+      <input type="password" id="pwCurrent" inputmode="numeric" placeholder="현재 암호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwNew').focus()">
+    </div>
+    <div class="form-field">
+      <label>새 비밀번호</label>
+      <input type="password" id="pwNew" inputmode="numeric" placeholder="새 암호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwConfirm').focus()">
+    </div>
+    <div class="form-field">
+      <label>새 비밀번호 확인</label>
+      <input type="password" id="pwConfirm" inputmode="numeric" placeholder="새 암호 재입력" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitPwChange()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closePwChangeModal()">취소</button>
+      <button class="btn-save-modal" onclick="submitPwChange()">변경</button>
+    </div>
+  </div>
+</div>
+
 <!-- 관리자 인증 모달 -->
 <div class="modal-bg" id="adminModal">
   <div class="modal modal-sm">
@@ -277,8 +312,8 @@
   </div>
 </div>
 
-<script src="data.js?v=29"></script>
-<script src="api.js?v=29"></script>
-<script src="app.js?v=29"></script>
+<script src="data.js?v=30"></script>
+<script src="api.js?v=30"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

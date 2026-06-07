@@ -9,7 +9,12 @@ function togglePresentMode() {
     btn.classList.toggle('active', presentMode);
     btn.textContent = presentMode ? '✕ 발표 종료' : '🖥️ 발표';
   }
-  // 캔버스 재계산 (레이아웃 변경 후)
+  // 발표 모드 해제 시 현재 탭(포메이션)이 보이도록 강제 적용
+  if (!presentMode) {
+    const tab = document.getElementById('tab-formation');
+    if (tab) tab.style.cssText = '';
+  }
+  // 레이아웃 확정 후 캔버스 재계산 (두 번 RAF로 안정적 크기 확보)
   requestAnimationFrame(() => requestAnimationFrame(() => {
     drawFieldCanvas();
     renderField();
@@ -2288,6 +2293,15 @@ function closeStatHistory() {
 
 // ── 탭 ──
 function switchTab(tab){
+  // 발표 모드 중 다른 탭 전환 시 자동 종료
+  if (presentMode && tab !== 'formation') {
+    presentMode = false;
+    document.body.classList.remove('presentation-mode');
+    const btn = document.getElementById('btnPresent');
+    if (btn) { btn.classList.remove('active'); btn.textContent = '🖥️ 발표'; }
+    const ft = document.getElementById('tab-formation');
+    if (ft) ft.style.cssText = '';
+  }
   ['home','roster','formation','records','stats'].forEach((t,i)=>{
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active',t===tab);
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);

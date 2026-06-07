@@ -70,10 +70,14 @@ const SLOT_LABEL_MATCH = {
 const SNAP_RADIUS = 0.05;
 const MAX_FIELD = 11;
 
-// ── OVR: 1~100, 20단위 별 1개씩 ──
+// ── OVR 별 구간: 1~39=1★ / 40~54=2★ / 55~69=3★ / 70~84=4★ / 85~100=5★ ──
 function ovrStarCount(ovr) {
-  if (ovr==null||ovr<1) return 0;
-  return Math.min(5, Math.ceil(ovr/20));
+  if (ovr == null || ovr < 1) return 0;
+  if (ovr >= 85) return 5;
+  if (ovr >= 70) return 4;
+  if (ovr >= 55) return 3;
+  if (ovr >= 40) return 2;
+  return 1;
 }
 function ovrStars(ovr) {
   const n=ovrStarCount(ovr); if(n===0)return '';

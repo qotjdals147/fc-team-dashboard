@@ -1,3 +1,21 @@
+// ── 프레젠테이션 모드 ──
+let presentMode = false;
+function togglePresentMode() {
+  if (!isAdmin) return;
+  presentMode = !presentMode;
+  document.body.classList.toggle('presentation-mode', presentMode);
+  const btn = document.getElementById('btnPresent');
+  if (btn) {
+    btn.classList.toggle('active', presentMode);
+    btn.textContent = presentMode ? '✕ 발표 종료' : '🖥️ 발표';
+  }
+  // 캔버스 재계산 (레이아웃 변경 후)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    drawFieldCanvas();
+    renderField();
+  }));
+}
+
 // ── 관리자 모드 ──
 const ADMIN_PW_DEFAULT = '0607';
 let isAdmin = false; // 새로고침·재접속 시 항상 비관리자 (비밀번호 재입력 필요)
@@ -264,10 +282,15 @@ function tokenStarArcHtml(ovr) {
   ).join('');
   return `<div class="token-star-arc ${tier}">${stars}</div>`;
 }
-function tokenOvrPillHtml(ovr) {
-  if (ovr == null) return '';
-  const tier = ovrStarTier(ovr);
-  return `<div class="token-ovr-pill ${tier}"><span class="token-ovr-label">OVR+</span><span class="token-ovr-val">${Math.round(ovr)}</span></div>`;
+function tokenOvrPillHtml(baseOvr, formBonus) {
+  if (baseOvr == null) return '';
+  const bonus = formBonus || 0;
+  const effectiveOvr = baseOvr + bonus;
+  const tier = ovrStarTier(effectiveOvr);
+  const bonusStr = bonus !== 0
+    ? `<span class="form-bonus-badge ${bonus > 0 ? 'plus' : 'minus'}">${bonus > 0 ? '+' : ''}${bonus}</span>`
+    : '';
+  return `<div class="token-ovr-pill ${tier}"><span class="token-ovr-label">OVR+</span><span class="token-ovr-val">${Math.round(baseOvr)}</span>${bonusStr}</div>`;
 }
 function buildTokenInnerHtml(p, pos, ovr, subPid) {
   let subStr = '';
@@ -275,17 +298,18 @@ function buildTokenInnerHtml(p, pos, ovr, subPid) {
     const subP = players.find(x => x.id === subPid);
     if (subP) subStr = `<div class="token-sub">🔄 ${subP.jersey != null ? subP.jersey + ' ' : ''}${subP.name}</div>`;
   }
-  // 필드 배치 포지션(pos)이 있으면 그 색으로, 없으면 등록 포지션 기준
   const circleColor = posColor(pos ? [pos] : p.positions);
+  const bonus = p.formBonus || 0;
+  const effectiveOvr = ovr != null ? ovr + bonus : null;
   return `<div class="token-avatar-wrap">
-    ${ovr != null ? tokenStarArcHtml(ovr) : ''}
+    ${effectiveOvr != null ? tokenStarArcHtml(effectiveOvr) : ''}
     <div class="token-circle" style="background:${circleColor}">
       ${p.name.slice(0, 2)}
       ${pos ? `<span class="token-pos-badge">${pos}</span>` : ''}
     </div>
   </div>
   <div class="token-name">${p.jersey != null ? p.jersey + ' ' : ''}${p.name}</div>
-  ${tokenOvrPillHtml(ovr)}${subStr}`;
+  ${tokenOvrPillHtml(ovr, bonus)}${subStr}`;
 }
 function tokenAtSlot(slotIdx, excludePid) {
   // 1차: slotIdx 정확히 일치
@@ -730,7 +754,10 @@ function renderRoster() {
   if (!players.length) { el.innerHTML='<div class="empty-state">선수가 없습니다</div>'; return; }
   el.innerHTML = players.map((p,i) => {
     const bestOvr = getBestOvr(p);
-    const ovrText = bestOvr!=null ? `<span class="ovr-badge">${bestOvr}</span>${ovrStars(bestOvr)}` : '';
+    const bonus = p.formBonus || 0;
+    const effectiveOvr = bestOvr != null ? bestOvr + bonus : null;
+    const bonusBadge = bonus !== 0 ? `<span class="form-bonus-badge ${bonus>0?'plus':'minus'}" style="font-size:11px;margin-left:3px">${bonus>0?'+':''}${bonus}</span>` : '';
+    const ovrText = effectiveOvr!=null ? `<span class="ovr-badge">${effectiveOvr}</span>${bonusBadge}${ovrStars(effectiveOvr)}` : '';
     const posOvrTags = p.positions.map(pos => {
       const ov = p.ovr?p.ovr[pos]:null;
       return `<span class="ovr-pos-item">${pos}${ov!=null?' '+ov:''}</span>`;
@@ -765,28 +792,50 @@ function buildPosCheckboxes() {
     <input type="checkbox" class="pos-cb" id="pcb_${p}" value="${p}" onchange="updateOvrInputs()">
     <label class="pos-cb-label" for="pcb_${p}">${p}</label>`).join('');
 }
+function ovrRowHtml(pos, v) {
+  return `<div class="ovr-row">
+    <span class="pos-label">${pos}</span>
+    <input type="range" class="ovr-range" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
+      oninput="syncOvrFromRange(this)">
+    <input type="number" class="ovr-number-input" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
+      oninput="syncOvrFromNumber(this)">
+    <span class="ovr-star-preview">${ovrStars(parseInt(v))}</span>
+  </div>`;
+}
+function syncOvrFromRange(el) {
+  const row = el.closest('.ovr-row');
+  row.querySelector('.ovr-number-input').value = el.value;
+  row.querySelector('.ovr-star-preview').innerHTML = ovrStars(parseInt(el.value));
+}
+function syncOvrFromNumber(el) {
+  let v = Math.min(100, Math.max(1, parseInt(el.value)||1));
+  el.value = v;
+  const row = el.closest('.ovr-row');
+  row.querySelector('.ovr-range').value = v;
+  row.querySelector('.ovr-star-preview').innerHTML = ovrStars(v);
+}
 function updateOvrInputs() {
   const selected = ALL_POS.filter(p=>document.getElementById('pcb_'+p)?.checked);
   const sec=document.getElementById('ovrSection'), inp=document.getElementById('ovrInputs');
   sec.style.display = selected.length?'block':'none';
   const curVals={};
   inp.querySelectorAll('.ovr-range').forEach(r=>{curVals[r.dataset.pos]=r.value;});
-  inp.innerHTML = selected.map(pos => {
-    const v = curVals[pos]??'50';
-    return `<div class="ovr-row">
-      <span class="pos-label">${pos}</span>
-      <input type="range" class="ovr-range" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
-        oninput="this.nextElementSibling.textContent=this.value;this.parentElement.querySelector('.ovr-star-preview').innerHTML=ovrStars(parseInt(this.value))">
-      <span class="ovr-val">${v}</span>
-      <span class="ovr-star-preview">${ovrStars(parseInt(v))}</span>
-    </div>`;
-  }).join('');
+  inp.innerHTML = selected.map(pos => ovrRowHtml(pos, curVals[pos]??'50')).join('');
+}
+function updateFormBonusPreview() {
+  const v = parseInt(document.getElementById('inputFormBonus').value) || 0;
+  const el = document.getElementById('formBonusPreview');
+  if (v === 0) { el.textContent = ''; return; }
+  el.textContent = v > 0 ? `+${v} 폼 상승` : `${v} 폼 하락`;
+  el.style.color = v > 0 ? '#4ade80' : '#f87171';
 }
 function openAddModal() {
   editingId=null;
   document.getElementById('modalTitle').textContent='선수 추가';
   document.getElementById('inputName').value='';
   document.getElementById('inputJersey').value='';
+  document.getElementById('inputFormBonus').value='0';
+  document.getElementById('formBonusPreview').textContent='';
   buildPosCheckboxes();
   document.getElementById('ovrSection').style.display='none';
   document.getElementById('ovrInputs').innerHTML='';
@@ -799,19 +848,15 @@ function openEditModal(id) {
   document.getElementById('modalTitle').textContent='선수 편집';
   document.getElementById('inputName').value=p.name;
   document.getElementById('inputJersey').value=p.jersey||'';
+  document.getElementById('inputFormBonus').value=p.formBonus||0;
+  updateFormBonusPreview();
   buildPosCheckboxes();
   p.positions.forEach(pos=>{const cb=document.getElementById('pcb_'+pos); if(cb)cb.checked=true;});
   const inp=document.getElementById('ovrInputs');
   document.getElementById('ovrSection').style.display=p.positions.length?'block':'none';
   inp.innerHTML=p.positions.map(pos=>{
     const v=(p.ovr&&p.ovr[pos]!=null)?p.ovr[pos]:50;
-    return `<div class="ovr-row">
-      <span class="pos-label">${pos}</span>
-      <input type="range" class="ovr-range" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
-        oninput="this.nextElementSibling.textContent=this.value;this.parentElement.querySelector('.ovr-star-preview').innerHTML=ovrStars(parseInt(this.value))">
-      <span class="ovr-val">${v}</span>
-      <span class="ovr-star-preview">${ovrStars(v)}</span>
-    </div>`;
+    return ovrRowHtml(pos, v);
   }).join('');
   document.getElementById('playerModal').classList.add('open');
 }
@@ -822,12 +867,13 @@ function savePlayer() {
   const jersey=parseInt(document.getElementById('inputJersey').value)||null;
   const positions=ALL_POS.filter(p=>document.getElementById('pcb_'+p)?.checked);
   const ovr={};
-  document.getElementById('ovrInputs').querySelectorAll('.ovr-range').forEach(r=>{ovr[r.dataset.pos]=parseInt(r.value);});
+  document.getElementById('ovrInputs').querySelectorAll('.ovr-number-input').forEach(r=>{ovr[r.dataset.pos]=parseInt(r.value)||50;});
+  const formBonus=parseInt(document.getElementById('inputFormBonus').value)||0;
   if(editingId){
     const idx=players.findIndex(x=>x.id===editingId);
-    if(idx>=0) players[idx]=normalizePlayerOvr({...players[idx],name,jersey,positions,ovr});
+    if(idx>=0) players[idx]=normalizePlayerOvr({...players[idx],name,jersey,positions,ovr,formBonus});
   } else {
-    players.push(normalizePlayerOvr({id:nextId(),name,jersey,positions,ovr}));
+    players.push(normalizePlayerOvr({id:nextId(),name,jersey,positions,ovr,formBonus}));
   }
   savePlayers(); closeModal(); renderRoster(); renderField(); refreshHomeIfVisible();
 }

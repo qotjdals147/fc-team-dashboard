@@ -202,8 +202,13 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .token-star-arc.tier-4 .token-star {
   background:linear-gradient(180deg,#fff7c2,#ffd700,#b8860b);
   -webkit-background-clip:text; background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 3px rgba(255,200,0,0.6));
+  animation:star-pulse-4 1.5s ease-in-out infinite;
 }
+@keyframes star-pulse-4 {
+  0%,100% { filter:drop-shadow(0 0 3px rgba(255,200,0,0.55)); }
+  50%      { filter:drop-shadow(0 0 9px rgba(255,215,0,1)) drop-shadow(0 0 16px rgba(255,180,0,0.5)); }
+}
+
 .token-star-arc.tier-5 .token-star {
   background:linear-gradient(120deg,#1a1a1a 0%,#ffd700 25%,#fff 40%,#c084fc 55%,#22d3ee 70%,#ffd700 85%,#1a1a1a 100%);
   background-size:220% auto;
@@ -221,8 +226,12 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .token-ovr-val { font-size:calc(10px * var(--tk)); font-weight:800; color:#fff; }
 .token-ovr-pill.tier-3 { border-color:rgba(201,162,39,0.45); }
 .token-ovr-pill.tier-3 .token-ovr-val { color:#f5e6a8; }
-.token-ovr-pill.tier-4 { border-color:rgba(255,215,0,0.5); box-shadow:0 0 6px rgba(255,200,0,0.2); }
+.token-ovr-pill.tier-4 { border-color:rgba(255,215,0,0.5); animation:pill-pulse-4 1.5s ease-in-out infinite; }
 .token-ovr-pill.tier-4 .token-ovr-val { color:#ffd700; }
+@keyframes pill-pulse-4 {
+  0%,100% { box-shadow:0 0 6px rgba(255,200,0,0.2); }
+  50%      { box-shadow:0 0 14px rgba(255,215,0,0.65), 0 0 24px rgba(255,180,0,0.3); }
+}
 .token-ovr-pill.tier-5 { border-color:rgba(255,215,0,0.65); background:rgba(10,10,10,0.72); box-shadow:0 0 8px rgba(255,215,0,0.25); }
 .token-ovr-pill.tier-5 .token-ovr-val { background:linear-gradient(90deg,#ffd700,#fff,#c084fc); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .token-sub { font-size:9px; font-weight:600; color:#ffe066; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:5px; margin-top:3px; white-space:nowrap; max-width:64px; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.4; }
@@ -349,3 +358,29 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .stat-history-score { font-weight:700; min-width:48px; }
 .stat-history-opp { flex:1; color:var(--text2); }
 .stat-history-count { font-weight:700; color:var(--info-text); }
+
+/* ── 프레젠테이션 모드 ── */
+.btn-present { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.2); color:var(--text2); border-radius:var(--radius); padding:5px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .2s; }
+.btn-present:hover { background:rgba(59,130,246,0.18); border-color:rgba(99,155,255,0.5); color:#fff; }
+.btn-present.active { background:rgba(59,130,246,0.25); border-color:rgba(99,155,255,0.7); color:#93c5fd; }
+.present-bar { display:flex; align-items:center; justify-content:space-between; padding:4px 10px 2px; }
+
+body.presentation-mode .formation-toolbar,
+body.presentation-mode .formation-saves-panel,
+body.presentation-mode .bench-section,
+body.presentation-mode .formation-view-label { display:none !important; }
+body.presentation-mode #tab-formation { display:flex; flex-direction:column; height:calc(100vh - 54px); overflow:hidden; }
+body.presentation-mode .field-wrap { flex:1; min-height:0; }
+body.presentation-mode .field-inner { height:100%; }
+body.presentation-mode .present-bar { background:rgba(0,0,0,0.25); border-bottom:1px solid rgba(255,255,255,0.08); }
+
+/* 프레젠테이션 모드 OVR 폼 보너스 뱃지 */
+.form-bonus-badge { font-size:calc(8px * var(--tk)); font-weight:800; padding:1px calc(4px * var(--tk)); border-radius:4px; line-height:1.4; }
+.form-bonus-badge.plus  { color:#4ade80; background:rgba(74,222,128,0.15); }
+.form-bonus-badge.minus { color:#f87171; background:rgba(248,113,113,0.15); }
+
+/* OVR 입력칸 (슬라이더 + 숫자) */
+.ovr-number-input { width:52px; text-align:center; font-size:13px; font-weight:700; padding:3px 4px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg2); color:var(--text1); }
+.form-bonus-row { display:flex; align-items:center; gap:10px; }
+.form-bonus-row input { width:72px; text-align:center; font-size:15px; font-weight:700; padding:5px 6px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg2); color:var(--text1); }
+.form-bonus-preview { font-size:12px; color:var(--text3); }

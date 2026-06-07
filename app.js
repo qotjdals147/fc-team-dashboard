@@ -5,6 +5,7 @@
 let players = [], editingId = null, fieldSize = {w:0,h:0};
 let matchEvents = {}, matchMom = null, editingMatchId = null;
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
+let cachedFormation = '';
 let matchParticipants = [];
 let statsSubTab = 'personal';
 let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
@@ -19,10 +20,75 @@ function isFormationSelected() {
   const f = getFormation();
   return !!(f && FORMATIONS[f]);
 }
+function saveFormationLocal(value) {
+  if (value && FORMATIONS[value]) {
+    cachedFormation = value;
+    localStorage.setItem('fc_formation', value);
+  }
+}
+function inferFormationFromTokens(tokens) {
+  if (!tokens?.length) return '';
+  let bestKey = '';
+  let bestScore = -1;
+  Object.keys(FORMATIONS).forEach(key => {
+    const labels = FORMATION_POS_LABELS[key] || [];
+    let score = 0;
+    tokens.forEach(t => {
+      if (t.slotIdx >= 0 && t.slotIdx < labels.length) {
+        if (!t.pos || t.pos === labels[t.slotIdx] || slotAcceptsPos(labels[t.slotIdx], t.pos)) score += 2;
+        else score += 1;
+      } else if (t.pos && labels.some(l => slotAcceptsPos(l, t.pos))) score += 1;
+    });
+    if (score > bestScore) { bestScore = score; bestKey = key; }
+  });
+  return bestScore > 0 ? bestKey : '4-3-3';
+}
+function resolveFormation(remoteFormation, tokens) {
+  if (remoteFormation && FORMATIONS[remoteFormation]) return remoteFormation;
+  const local = localStorage.getItem('fc_formation');
+  if (local && FORMATIONS[local]) return local;
+  if (tokens?.length) return inferFormationFromTokens(tokens);
+  return '';
+}
 function setFormationSelect(value) {
   const sel = document.getElementById('formationSelect');
   if (!sel) return;
-  sel.value = value && FORMATIONS[value] ? value : '';
+  const v = value && FORMATIONS[value] ? value : '';
+  sel.value = v;
+  if (v) saveFormationLocal(v);
+}
+function getFormationForSave() {
+  const sel = getFormation();
+  if (sel && FORMATIONS[sel]) return sel;
+  if (cachedFormation && FORMATIONS[cachedFormation]) return cachedFormation;
+  if (fieldTokens.length) return inferFormationFromTokens(fieldTokens) || '4-3-3';
+  return '';
+}
+function reconcileFieldTokensToFormation() {
+  const slots = getSlots();
+  const labels = getLabels();
+  if (!slots.length) return;
+  fieldTokens.forEach(ft => {
+    if (ft.slotIdx >= 0 && ft.slotIdx < labels.length) {
+      if (!ft.pos) ft.pos = labels[ft.slotIdx];
+      return;
+    }
+    const near = (ft.freeX != null && ft.freeY != null)
+      ? findNearestSlot(ft.pid, ft.freeX, ft.freeY) : -1;
+    if (near >= 0 && !tokenAtSlot(near, ft.pid)) {
+      ft.slotIdx = near;
+      ft.pos = labels[near];
+      return;
+    }
+    if (ft.pos) {
+      const idx = findBestSlot(ft.pos, slots, labels, ft.pid);
+      if (idx >= 0) {
+        ft.slotIdx = idx;
+        ft.freeX = slots[idx][0];
+        ft.freeY = slots[idx][1];
+      }
+    }
+  });
 }
 function alertFormationRequired() {
   alert('포메이션을 선택해주세요.');
@@ -129,9 +195,13 @@ function applyRemoteData(data) {
   myTeamName = data.meta?.myTeam || '';
   teamPhotoUrl = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
-  const field = data.field || { formation: '', tokens: [] };
-  setFormationSelect(field.formation);
-  fieldTokens = normalizeFieldTokens(field.tokens);
+  const field = data.field || {};
+  const tokens = normalizeFieldTokens(field.tokens);
+  const formation = resolveFormation(field.formation, tokens);
+  if (formation) saveFormationLocal(formation);
+  setFormationSelect(formation);
+  fieldTokens = tokens;
+  if (formation) reconcileFieldTokensToFormation();
 }
 async function maybeMigrateLocal(data) {
   const remoteEmpty = !data.players?.length && !data.matches?.length && !data.saves?.length;
@@ -145,7 +215,7 @@ async function maybeMigrateLocal(data) {
   const migrated = {
     players: lp ? JSON.parse(lp) : [],
     matches: lm ? JSON.parse(lm) : [],
-    field: lf ? { formation: '4-3-3', tokens: JSON.parse(lf) } : (data.field || { formation: '4-3-3', tokens: [] }),
+    field: lf ? { formation: localStorage.getItem('fc_formation') || '4-3-3', tokens: JSON.parse(lf) } : (data.field || { formation: '4-3-3', tokens: [] }),
     saves: ls ? JSON.parse(ls) : [],
     meta: { myTeam: lt || '' },
   };
@@ -189,6 +259,9 @@ async function bootstrapApp() {
   renderFormationSaves();
   populateStatsYearFilter();
   document.getElementById('formationSelect').addEventListener('change', () => {
+    const f = getFormation();
+    if (f) saveFormationLocal(f);
+    reconcileFieldTokensToFormation();
     slotHighlight = -1;
     drawFieldCanvas(-1);
     renderField();
@@ -197,7 +270,12 @@ async function bootstrapApp() {
 }
 async function persistPlayers() { await apiSavePartial({ players }); }
 async function persistField() {
-  await apiSavePartial({ field: { formation: getFormation(), tokens: fieldTokens } });
+  const formation = getFormationForSave();
+  if (formation) saveFormationLocal(formation);
+  const payload = { formation, tokens: fieldTokens };
+  localStorage.setItem('fc_field', JSON.stringify(fieldTokens));
+  localStorage.setItem('fc_field_full', JSON.stringify(payload));
+  await apiSavePartial({ field: payload });
 }
 async function persistMatches() { await apiSavePartial({ matches }); }
 async function persistSaves() { await apiSavePartial({ saves: formationSaves }); }
@@ -499,14 +577,15 @@ function openFieldActionMenu(pid, anchorEl) {
   const p = players.find(x => x.id === pid);
   if (!p) return;
   anchorEl = anchorEl || document.querySelector(`.player-token[data-pid="${pid}"]`);
+  document.getElementById('posPopup').classList.remove('wide');
   document.getElementById('posPopupTitle').textContent =
     `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}`;
   const grid = document.getElementById('posPopupGrid');
   grid.className = 'pos-popup-grid actions';
   grid.innerHTML = `
-    <button type="button" class="pos-popup-action" onclick="openFieldPosGrid(${pid})">📍 포지션 바꾸기</button>
-    <button type="button" class="pos-popup-action" onclick="openSwapPopup(${pid})">↔️ 다른 선수와 교체</button>
-    <button type="button" class="pos-popup-action pos-popup-action-danger" onclick="sendToBenchFromPopup()">벤치로 보내기</button>
+    <button type="button" class="pos-popup-action" onclick="event.stopPropagation();openFieldPosGrid(${pid})">📍 포지션 바꾸기</button>
+    <button type="button" class="pos-popup-action" onclick="event.stopPropagation();openSwapPopup(${pid})">↔️ 다른 선수와 교체</button>
+    <button type="button" class="pos-popup-action pos-popup-action-danger" onclick="event.stopPropagation();sendToBenchFromPopup()">벤치로 보내기</button>
   `;
   hidePosPopupExtras();
   _showPopupAt(anchorEl);
@@ -516,16 +595,16 @@ function openFieldPosGrid(pid) {
   popupTargetPid = pid;
   const p = players.find(x => x.id === pid);
   if (!p) return;
-  const anchorEl = document.querySelector(`.player-token[data-pid="${pid}"]`);
   document.getElementById('posPopupTitle').textContent = `포지션 변경 · ${p.name}`;
   const grid = document.getElementById('posPopupGrid');
-  grid.className = 'pos-popup-grid';
+  grid.className = 'pos-popup-grid pos-popup-grid-wide';
   grid.innerHTML =
-    `<button type="button" class="pos-popup-back" onclick="openFieldActionMenu(${pid}, null)">← 메뉴로</button>
+    `<button type="button" class="pos-popup-back" onclick="event.stopPropagation();openFieldActionMenu(${pid}, null)">← 메뉴로</button>
      <div class="pos-popup-grid-inner">${renderPosPopupGrid(pid)}</div>`;
   hidePosPopupExtras();
   document.getElementById('posPopupSubBtn').style.display = 'block';
-  _showPopupAt(anchorEl);
+  const popup = document.getElementById('posPopup');
+  popup.classList.add('open', 'wide');
 }
 function handlePlayerTap(pid, anchorEl, fromBench) {
   if (fromBench) {
@@ -655,7 +734,8 @@ function _showPopupAt(anchorEl) {
 }
 
 function closePosPopup() {
-  document.getElementById('posPopup').classList.remove('open');
+  const popup = document.getElementById('posPopup');
+  popup.classList.remove('open', 'wide');
   popupTargetPid = null;
   popupMode = 'pos';
   const grid = document.getElementById('posPopupGrid');
@@ -742,7 +822,7 @@ function clearSubPlayer() {
 
 document.addEventListener('click',function(e){
   const pp=document.getElementById('posPopup');
-  if(pp.classList.contains('open')&&!pp.contains(e.target)&&!e.target.closest('.player-token')&&!e.target.closest('.bench-player'))
+  if(pp.classList.contains('open')&&!e.target.closest('.pos-popup')&&!e.target.closest('.player-token')&&!e.target.closest('.bench-player'))
     closePosPopup();
 });
 
@@ -1276,8 +1356,23 @@ function applyFormation(){
 function clearField(){fieldTokens=[];saveFieldState();renderField();}
 function saveFieldState(){ persistField().catch(handleSaveError); }
 function loadFieldState(){
-  const s=localStorage.getItem('fc_field'); if(!s)return;
-  fieldTokens=normalizeFieldTokens(JSON.parse(s));
+  const full = localStorage.getItem('fc_field_full');
+  if (full) {
+    try {
+      const o = JSON.parse(full);
+      fieldTokens = normalizeFieldTokens(o.tokens);
+      const formation = resolveFormation(o.formation, fieldTokens);
+      if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
+      if (formation) reconcileFieldTokensToFormation();
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  const s = localStorage.getItem('fc_field');
+  if (!s) return;
+  fieldTokens = normalizeFieldTokens(JSON.parse(s));
+  const formation = resolveFormation(localStorage.getItem('fc_formation'), fieldTokens);
+  if (formation) { saveFormationLocal(formation); setFormationSelect(formation); }
+  if (formation) reconcileFieldTokensToFormation();
 }
 
 // ── 포메이션 저장 ──

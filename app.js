@@ -1,6 +1,6 @@
 // ── 상태 ──
 // fieldTokens: { pid, slotIdx, freeX, freeY, pos, subPid? }
-// slotIdx >= 0 → 슬롯 고정 / -1 → 자유위치
+// slotIdx >= 0 → 어느 포메이션 슬롯(역할)인지 / freeX·freeY → 실제 화면 좌표(미세 조정)
 // subPid: 교체 예정 선수 pid (optional)
 let players = [], editingId = null, fieldSize = {w:0,h:0};
 let matchEvents = {}, matchMom = null, editingMatchId = null;
@@ -17,9 +17,15 @@ function getSlots()     { return FORMATIONS[getFormation()] || []; }
 function getLabels()    { return FORMATION_POS_LABELS[getFormation()] || []; }
 
 function tokenXY(t) {
+  // freeX/freeY = 실제 화면 위치 (슬롯 근처 미세 조정 가능)
+  if (t.freeX != null && t.freeY != null) return { x: t.freeX, y: t.freeY };
   const slots = getSlots();
-  if (t.slotIdx >= 0 && slots[t.slotIdx]) return {x:slots[t.slotIdx][0], y:slots[t.slotIdx][1]};
-  return {x:t.freeX??0.5, y:t.freeY??0.5};
+  if (t.slotIdx >= 0 && slots[t.slotIdx]) return { x: slots[t.slotIdx][0], y: slots[t.slotIdx][1] };
+  return { x: 0.5, y: 0.5 };
+}
+function slotDefaultXY(i) {
+  const slots = getSlots();
+  return slots[i] ? { x: slots[i][0], y: slots[i][1] } : { x: 0.5, y: 0.5 };
 }
 function tokenAtSlot(slotIdx, excludePid) {
   return fieldTokens.find(t => t.slotIdx === slotIdx && t.pid !== excludePid);
@@ -584,25 +590,21 @@ function findBestSlot(pos, slots, labels, excludePid) {
 }
 
 // ── 필드 캔버스 ──
-const FIELD_PAD = 16;
+function fieldPad(W) { return Math.max(8, Math.round(W * 16 / 400)); }
 function getCanvasRect() { return document.getElementById('fieldCanvas').getBoundingClientRect(); }
-function scaleFieldPad(w, h) {
-  const rw = fieldSize.w || w, rh = fieldSize.h || h;
-  return { px: FIELD_PAD * (w / rw), py: FIELD_PAD * (h / rh) };
-}
 function pointerToNorm(clientX, clientY) {
   const cr = getCanvasRect();
-  const { px, py } = scaleFieldPad(cr.width, cr.height);
-  const nx = (clientX - cr.left - px) / (cr.width - 2 * px);
-  const ny = (clientY - cr.top - py) / (cr.height - 2 * py);
+  const pad = fieldPad(cr.width);
+  const nx = (clientX - cr.left - pad) / (cr.width - 2 * pad);
+  const ny = (clientY - cr.top - pad) / (cr.height - 2 * pad);
   return {
     x: Math.max(0.02, Math.min(0.98, nx)),
     y: Math.max(0.02, Math.min(0.98, ny)),
   };
 }
-/** 포메이션 고정 좌표(0~1) → 캔버스 픽셀. 슬롯·선수 배치 공통 변환 */
+/** 포메이션 기본 좌표(0~1, 플레이 영역) → 캔버스 픽셀 — 슬롯 마커·선수 공통 */
 function normToCanvasPx(nx, ny, W, H) {
-  const pad = FIELD_PAD;
+  const pad = fieldPad(W);
   return { x: pad + nx * (W - 2 * pad), y: pad + ny * (H - 2 * pad) };
 }
 /** 포메이션 슬롯을 필드 캔버스에 직접 그림 — 선수와 무관한 고정 자리 */
@@ -671,7 +673,7 @@ function drawGrass(canvas) {
   ctx.fillStyle='#1e7a43'; ctx.fillRect(0,0,W,H);
   for(let i=0;i<8;i++){if(i%2===0){ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(0,i*H/8,W,H/8);}}
   ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5;
-  const pad=16;
+  const pad=fieldPad(W);
   ctx.strokeRect(pad,pad,W-pad*2,H-pad*2);
   const mx=W/2, my=H/2;
   ctx.beginPath();ctx.moveTo(pad,my);ctx.lineTo(W-pad,my);ctx.stroke();
@@ -1018,8 +1020,8 @@ function onGlobalUp(e){
         other.freeY=prevSlot>=0?getSlots()[prevSlot]?.[1]??prevFY:prevFY;
       }
       ft.slotIdx=nearSlot;
-      ft.freeX=getSlots()[nearSlot][0];
-      ft.freeY=getSlots()[nearSlot][1];
+      ft.freeX=nx;
+      ft.freeY=ny;
       if(!ft.pos&&labels[nearSlot])ft.pos=labels[nearSlot];
     } else {
       ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny;
@@ -1083,7 +1085,8 @@ function applyFormation(){
     const p=pickBestPlayerForSlot(label,used);
     if(!p) continue;
     used.add(p.id);
-    fieldTokens.push({pid:p.id,slotIdx:i,freeX:slots[i][0],freeY:slots[i][1],pos:bestPosForSlot(p,label)});
+    const def=slotDefaultXY(i);
+    fieldTokens.push({pid:p.id,slotIdx:i,freeX:def.x,freeY:def.y,pos:bestPosForSlot(p,label)});
   }
   saveFieldState();renderField();
 }

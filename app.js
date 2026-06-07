@@ -683,8 +683,14 @@ function renderHome() {
   if (countEl) countEl.textContent = `(${players.length}명)`;
   const grid = document.getElementById('homeMemberGrid');
   if (grid) {
-    grid.innerHTML = players.length
-      ? players.map(p => `<div class="home-member-chip">${p.jersey != null ? `<span class="home-member-no">${p.jersey}</span>` : ''}${p.name}</div>`).join('')
+    const sorted = [...players].sort((a, b) => {
+      if (a.jersey == null && b.jersey == null) return 0;
+      if (a.jersey == null) return 1;
+      if (b.jersey == null) return -1;
+      return a.jersey - b.jersey;
+    });
+    grid.innerHTML = sorted.length
+      ? sorted.map(p => `<div class="home-member-chip">${p.jersey != null ? `<span class="home-member-no">${p.jersey}</span>` : ''}${p.name}</div>`).join('')
       : '<div style="font-size:12px;color:var(--text3)">명단 탭에서 선수를 추가해주세요</div>';
   }
 }

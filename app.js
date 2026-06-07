@@ -411,29 +411,137 @@ function deletePlayer(id) {
 document.getElementById('playerModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
 // ── 통합 팝업 (포지션 변경 + 선수 변경) ──
-function openPosPopup(pid, anchorEl, fromBench) {
+function renderPosPopupGrid(pid) {
+  const p = players.find(x => x.id === pid);
+  const ft = fieldTokens.find(t => t.pid === pid);
+  if (!p) return '';
+  const curPos = ft?.pos || p.positions[0] || '';
+  if (!isFormationSelected()) {
+    return '<div class="pos-popup-hint">포메이션을 먼저 선택해주세요.</div>';
+  }
+  return ALL_POS.map(pos =>
+    `<button class="pos-popup-btn ${pos === curPos ? 'active' : ''}" onclick="selectPosFromPopup('${pos}')">${pos}</button>`
+  ).join('');
+}
+function hidePosPopupExtras() {
+  document.getElementById('posPopupSwapBtn').style.display = 'none';
+  document.getElementById('posPopupSubBtn').style.display = 'none';
+  document.getElementById('posPopupBenchBtn').style.display = 'none';
+}
+function findBestEmptySlotForPlayer(p) {
+  const labels = getLabels();
+  let bestIdx = -1;
+  let bestScore = -1;
+  for (let i = 0; i < labels.length; i++) {
+    if (tokenAtSlot(i, null)) continue;
+    const label = labels[i];
+    const matching = p.positions?.length
+      ? p.positions.filter(pos => slotAcceptsPos(label, pos))
+      : [];
+    let score;
+    if (matching.length) {
+      score = Math.max(...matching.map(pos => getOvr(p, pos) ?? 0));
+    } else if (!p.positions?.length) {
+      score = 0;
+    } else {
+      continue;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+function autoPlaceFromBench(pid) {
+  if (!isFormationSelected()) { alertFormationRequired(); return false; }
+  if (fieldTokens.length >= MAX_FIELD) {
+    alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);
+    return false;
+  }
+  if (fieldTokens.find(t => t.pid === pid)) return false;
+  const p = players.find(x => x.id === pid);
+  if (!p) return false;
+  const slots = getSlots();
+  const labels = getLabels();
+  const slotIdx = findBestEmptySlotForPlayer(p);
+  if (slotIdx < 0) return false;
+  const pos = labels[slotIdx];
+  const err = checkSlotCapacity(pos, null);
+  if (err) { alert(err); return false; }
+  fieldTokens.push({
+    pid,
+    slotIdx,
+    freeX: slots[slotIdx][0],
+    freeY: slots[slotIdx][1],
+    pos,
+  });
+  saveFieldState();
+  renderField();
+  return true;
+}
+function openBenchPosMenu(pid, anchorEl) {
+  popupMode = 'bench-pos';
+  popupTargetPid = pid;
+  const p = players.find(x => x.id === pid);
+  if (!p) return;
+  document.getElementById('posPopupTitle').textContent =
+    `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name} · 포지션 선택`;
+  const grid = document.getElementById('posPopupGrid');
+  grid.className = 'pos-popup-grid';
+  grid.innerHTML = renderPosPopupGrid(pid);
+  hidePosPopupExtras();
+  _showPopupAt(anchorEl);
+}
+function openFieldActionMenu(pid, anchorEl) {
+  popupMode = 'field-menu';
+  popupTargetPid = pid;
+  const p = players.find(x => x.id === pid);
+  if (!p) return;
+  anchorEl = anchorEl || document.querySelector(`.player-token[data-pid="${pid}"]`);
+  document.getElementById('posPopupTitle').textContent =
+    `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}`;
+  const grid = document.getElementById('posPopupGrid');
+  grid.className = 'pos-popup-grid actions';
+  grid.innerHTML = `
+    <button type="button" class="pos-popup-action" onclick="openFieldPosGrid(${pid})">📍 포지션 바꾸기</button>
+    <button type="button" class="pos-popup-action" onclick="openSwapPopup(${pid})">↔️ 다른 선수와 교체</button>
+    <button type="button" class="pos-popup-action pos-popup-action-danger" onclick="sendToBenchFromPopup()">벤치로 보내기</button>
+  `;
+  hidePosPopupExtras();
+  _showPopupAt(anchorEl);
+}
+function openFieldPosGrid(pid) {
   popupMode = 'pos';
   popupTargetPid = pid;
-  const p = players.find(x=>x.id===pid); if(!p) return;
-  const ft = fieldTokens.find(t=>t.pid===pid);
-  const curPos = ft?.pos||p.positions[0]||'';
-
-  // 팝업 제목
-  document.getElementById('posPopupTitle').textContent = `${p.jersey?'#'+p.jersey+' ':''}${p.name}`;
-
-  // 포지션 버튼
-  document.getElementById('posPopupGrid').innerHTML = ALL_POS.map(pos =>
-    `<button class="pos-popup-btn ${pos===curPos?'active':''}" onclick="selectPosFromPopup('${pos}')">${pos}</button>`
-  ).join('');
-
-  document.getElementById('posPopupSwapBtn').style.display = ft ? 'block' : 'none';
-  document.getElementById('posPopupSubBtn').style.display = ft ? 'block' : 'none';
-  const bb = document.getElementById('posPopupBenchBtn');
-  bb.style.display = ft ? 'block' : 'none';
-  bb.textContent = '벤치로 보내기';
-  bb.onclick = sendToBenchFromPopup;
-
+  const p = players.find(x => x.id === pid);
+  if (!p) return;
+  const anchorEl = document.querySelector(`.player-token[data-pid="${pid}"]`);
+  document.getElementById('posPopupTitle').textContent = `포지션 변경 · ${p.name}`;
+  const grid = document.getElementById('posPopupGrid');
+  grid.className = 'pos-popup-grid';
+  grid.innerHTML =
+    `<button type="button" class="pos-popup-back" onclick="openFieldActionMenu(${pid}, null)">← 메뉴로</button>
+     <div class="pos-popup-grid-inner">${renderPosPopupGrid(pid)}</div>`;
+  hidePosPopupExtras();
+  document.getElementById('posPopupSubBtn').style.display = 'block';
   _showPopupAt(anchorEl);
+}
+function handlePlayerTap(pid, anchorEl, fromBench) {
+  if (fromBench) {
+    if (autoPlaceFromBench(pid)) return;
+    const p = players.find(x => x.id === pid);
+    if (isFormationSelected() && fieldTokens.length < MAX_FIELD && p && findBestEmptySlotForPlayer(p) < 0) {
+      alert('맞는 빈 자리가 없습니다. 포지션을 직접 선택해주세요.');
+    }
+    openBenchPosMenu(pid, anchorEl);
+    return;
+  }
+  if (fieldTokens.find(t => t.pid === pid)) {
+    openFieldActionMenu(pid, anchorEl);
+  } else {
+    openBenchPosMenu(pid, anchorEl);
+  }
 }
 
 function openSubPopup(pid) {
@@ -457,7 +565,9 @@ function openSubPopup(pid) {
     </button>`;
   }).join('');
 
-  document.getElementById('posPopupGrid').innerHTML = bench.length
+  const subGrid = document.getElementById('posPopupGrid');
+  subGrid.className = 'pos-popup-grid';
+  subGrid.innerHTML = bench.length
     ? `<div style="width:100%;max-height:200px;overflow-y:auto">${rows}</div>`
     : '<div style="font-size:11px;color:var(--text3)">벤치에 교체 가능한 선수가 없습니다</div>';
 
@@ -490,7 +600,9 @@ function openSwapPopup(pid) {
     </button>`;
   }).join('');
 
-  document.getElementById('posPopupGrid').innerHTML = others.length
+  const swapGrid = document.getElementById('posPopupGrid');
+  swapGrid.className = 'pos-popup-grid';
+  swapGrid.innerHTML = others.length
     ? `<div style="width:100%;max-height:200px;overflow-y:auto">${rows}</div>`
     : '<div style="font-size:11px;color:var(--text3)">교체할 필드 선수가 없습니다</div>';
 
@@ -516,7 +628,9 @@ function openBenchReplace(benchPid) {
     </button>`;
   }).join('');
 
-  document.getElementById('posPopupGrid').innerHTML = fieldTokens.length
+  const brGrid = document.getElementById('posPopupGrid');
+  brGrid.className = 'pos-popup-grid';
+  brGrid.innerHTML = fieldTokens.length
     ? `<div style="width:100%;max-height:200px;overflow-y:auto">${rows}</div>`
     : '<div style="font-size:11px;color:var(--text3)">필드에 교체할 선수가 없습니다</div>';
 
@@ -542,12 +656,14 @@ function _showPopupAt(anchorEl) {
 
 function closePosPopup() {
   document.getElementById('posPopup').classList.remove('open');
-  popupTargetPid=null; popupMode='pos';
-  const bb=document.getElementById('posPopupBenchBtn');
-  bb.textContent='벤치로 보내기';
-  bb.onclick=sendToBenchFromPopup;
-  document.getElementById('posPopupSwapBtn').style.display='none';
-  document.getElementById('posPopupSubBtn').style.display='none';
+  popupTargetPid = null;
+  popupMode = 'pos';
+  const grid = document.getElementById('posPopupGrid');
+  if (grid) grid.className = 'pos-popup-grid';
+  const bb = document.getElementById('posPopupBenchBtn');
+  bb.textContent = '벤치로 보내기';
+  bb.onclick = sendToBenchFromPopup;
+  hidePosPopupExtras();
 }
 
 function sendToBenchFromPopup() {
@@ -558,13 +674,13 @@ function sendToBenchFromPopup() {
 
 function selectPosFromPopup(pos) {
   if(!popupTargetPid) return;
+  if (!isFormationSelected()) { alertFormationRequired(); closePosPopup(); return; }
   const pid=popupTargetPid;
   const p=players.find(x=>x.id===pid); if(!p) return;
 
   const slots=getSlots(), labels=getLabels();
   const ft=fieldTokens.find(t=>t.pid===pid);
 
-  // ── 포지션별 슬롯 수 초과 체크 ──
   const err = checkSlotCapacity(pos, ft?pid:null);
   if(err) { alert(err); return; }
 
@@ -582,7 +698,6 @@ function selectPosFromPopup(pos) {
     }
     ft.pos=pos;
   } else {
-    if (!isFormationSelected()) { alertFormationRequired(); closePosPopup(); return; }
     if(fieldTokens.length>=MAX_FIELD){alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);closePosPopup();return;}
     const slotIdx=findBestSlot(pos, slots, labels, null);
     if(slotIdx<0){alert(`${pos} 에 배치할 수 있는 빈 자리가 없습니다.`);closePosPopup();return;}
@@ -931,6 +1046,35 @@ function findNearestSlot(excludePid,nx,ny){
   slots.forEach((sl,i)=>{const d=Math.hypot(sl[0]-nx,sl[1]-ny);if(d<bd){bd=d;best=i;}});
   return best;
 }
+/** 슬롯에 스냅 시 해당 슬롯 역할(ST, RB 등)로 포지션 자동 반영 */
+function applySlotSnap(ft, nearSlot, nx, ny, pid) {
+  const labels = getLabels();
+  const slots = getSlots();
+  const slotPos = labels[nearSlot] || '';
+  const other = tokenAtSlot(nearSlot, pid);
+
+  if (!other && slotPos) {
+    const err = checkSlotCapacity(slotPos, pid);
+    if (err) { alert(err); return false; }
+  }
+
+  const prevSlot = ft.slotIdx;
+  const prevFX = ft.freeX ?? slots[prevSlot]?.[0] ?? 0.5;
+  const prevFY = ft.freeY ?? slots[prevSlot]?.[1] ?? 0.5;
+
+  if (other) {
+    other.slotIdx = prevSlot;
+    other.freeX = prevSlot >= 0 ? slots[prevSlot]?.[0] ?? prevFX : prevFX;
+    other.freeY = prevSlot >= 0 ? slots[prevSlot]?.[1] ?? prevFY : prevFY;
+    if (prevSlot >= 0 && labels[prevSlot]) other.pos = labels[prevSlot];
+  }
+
+  ft.slotIdx = nearSlot;
+  ft.freeX = nx;
+  ft.freeY = ny;
+  if (slotPos) ft.pos = slotPos;
+  return true;
+}
 function tokenPos(nx, ny) {
   const cr = getCanvasRect();
   const inner = document.getElementById('fieldInner').getBoundingClientRect();
@@ -1043,7 +1187,7 @@ function onGlobalUp(e){
   if(el)el.classList.remove('dragging','snapping');
   slotHighlight = -1;
 
-  if(!wasActive&&!wasMoved){openPosPopup(pid,el,wasFromBench);refreshFieldSlots(-1);return;}
+  if(!wasActive&&!wasMoved){handlePlayerTap(pid,el,wasFromBench);refreshFieldSlots(-1);return;}
 
   if(wasActive){
     // 벤치로 드래그
@@ -1058,27 +1202,9 @@ function onGlobalUp(e){
 
     const nearSlot=findNearestSlot(pid,nx,ny);
     if(nearSlot>=0){
-      const labels=getLabels();
-      const other=tokenAtSlot(nearSlot,pid);
-      if(!other){
-        // 빈 슬롯에 드래그: 포지션 슬롯 수 초과 체크
-        // ft.pos가 이 슬롯 레이블과 안 맞으면 경고 (단, 포지션 없는 경우 허용)
-        if(ft.pos){
-          const err=checkSlotCapacity(ft.pos, pid);
-          if(err){ alert(err); ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny; saveFieldState();renderField();return; }
-        }
+      if (!applySlotSnap(ft, nearSlot, nx, ny, pid)) {
+        ft.slotIdx=-1; ft.freeX=nx; ft.freeY=ny;
       }
-      // 이전 슬롯 기억 (other 교체용)
-      const prevSlot=ft.slotIdx, prevFX=ft.freeX??getSlots()[ft.slotIdx]?.[0]??0.5, prevFY=ft.freeY??getSlots()[ft.slotIdx]?.[1]??0.5;
-      if(other){
-        other.slotIdx=prevSlot;
-        other.freeX=prevSlot>=0?getSlots()[prevSlot]?.[0]??prevFX:prevFX;
-        other.freeY=prevSlot>=0?getSlots()[prevSlot]?.[1]??prevFY:prevFY;
-      }
-      ft.slotIdx=nearSlot;
-      ft.freeX=nx;
-      ft.freeY=ny;
-      if(!ft.pos&&labels[nearSlot])ft.pos=labels[nearSlot];
     } else {
       ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny;
     }

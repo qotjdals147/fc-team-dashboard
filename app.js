@@ -344,9 +344,13 @@ async function persistMeta() {
 function normalizePhotoUrl(url) {
   if (!url) return '';
   const u = url.trim();
-  // Google Drive
-  const fileId = u.match(/\/file\/d\/([^/]+)/)?.[1] || (u.includes('drive.google.com') && u.match(/[?&]id=([^&]+)/)?.[1]);
-  if (fileId) return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  // Google Drive: /file/d/ID/view 또는 ?id=ID 형태 모두 처리
+  const fileId = u.match(/\/file\/d\/([^/?]+)/)?.[1]
+    || (u.includes('drive.google.com') && u.match(/[?&]id=([^&]+)/)?.[1]);
+  if (fileId) {
+    // thumbnail URL: 2023년 이후 가장 안정적인 직접 표시 방법
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
   // OneDrive / Windows 공유 링크 → 직접 표시 불가
   if (/onedrive\.live\.com|1drv\.ms|sharepoint\.com/i.test(u)) return '__onedrive__';
   return u;
@@ -827,8 +831,13 @@ function selectPosFromPopup(pos) {
   const slots=getSlots(), labels=getLabels();
   const ft=fieldTokens.find(t=>t.pid===pid);
 
-  const err = checkSlotCapacity(pos, ft?pid:null);
-  if(err) { alert(err); return; }
+  if(!ft) {
+    // 벤치 → 필드: 인원·용량 체크 필요
+    if(fieldTokens.length>=MAX_FIELD){alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);closePosPopup();return;}
+    const err = checkSlotCapacity(pos, null);
+    if(err) { alert(err); return; }
+  }
+  // 필드 선수 포지션 변경: 체크 없음 (자리만 바뀌므로 총 인원 변동 없음)
 
   // 포지션 목록 맨 앞으로
   if(!p.positions.includes(pos)) p.positions.unshift(pos);
@@ -839,12 +848,17 @@ function selectPosFromPopup(pos) {
     const slotIdx=findBestSlot(pos, slots, labels, pid);
     if(slotIdx>=0) {
       const other=tokenAtSlot(slotIdx,pid);
-      if(other){other.slotIdx=ft.slotIdx; other.freeX=ft.freeX; other.freeY=ft.freeY;}
+      if(other) {
+        // 자리가 차 있으면 서로 swap (드래그와 동일 동작)
+        other.slotIdx=ft.slotIdx;
+        other.freeX=slots[ft.slotIdx]?.[0] ?? ft.freeX;
+        other.freeY=slots[ft.slotIdx]?.[1] ?? ft.freeY;
+        if(ft.slotIdx>=0 && labels[ft.slotIdx]) other.pos=labels[ft.slotIdx];
+      }
       ft.slotIdx=slotIdx; ft.freeX=slots[slotIdx][0]; ft.freeY=slots[slotIdx][1];
     }
     ft.pos=pos;
   } else {
-    if(fieldTokens.length>=MAX_FIELD){alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);closePosPopup();return;}
     const slotIdx=findBestSlot(pos, slots, labels, null);
     if(slotIdx<0){alert(`${pos} 에 배치할 수 있는 빈 자리가 없습니다.`);closePosPopup();return;}
     fieldTokens.push({pid, slotIdx, freeX:slots[slotIdx][0], freeY:slots[slotIdx][1], pos});

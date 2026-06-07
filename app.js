@@ -313,7 +313,6 @@ function buildTokenInnerHtml(p, pos, ovr, subPid) {
       ${pos ? `<span class="token-pos-badge">${pos}</span>` : ''}
     </div>
   </div>
-  <div class="token-name">${p.jersey != null ? p.jersey + ' ' : ''}${p.name}</div>
   ${tokenOvrPillHtml(ovr, bonus)}${subStr}`;
 }
 function tokenAtSlot(slotIdx, excludePid) {
@@ -1034,9 +1033,20 @@ function openFieldActionMenu(pid, anchorEl) {
   html += '</div>';
   grid.innerHTML = html;
 
-  // 벤치로 보내기 버튼만 표시
   document.getElementById('posPopupSwapBtn').style.display = 'none';
-  document.getElementById('posPopupSubBtn').style.display = 'none';
+
+  // 교체 예정 버튼: 이미 등록된 경우 해제 텍스트로
+  const ft2 = fieldTokens.find(t => t.pid === pid);
+  const subBtn = document.getElementById('posPopupSubBtn');
+  subBtn.style.display = 'block';
+  if (ft2?.subPid) {
+    subBtn.textContent = '교체 예정 해제';
+    subBtn.onclick = clearSubPlayer;
+  } else {
+    subBtn.textContent = '🔄 교체 예정 등록';
+    subBtn.onclick = () => openSubPopup(pid);
+  }
+
   const benchBtn = document.getElementById('posPopupBenchBtn');
   benchBtn.textContent = '벤치로 보내기';
   benchBtn.onclick = sendToBenchFromPopup;
@@ -2016,7 +2026,7 @@ function buildParticipantsFromMatch(em) {
 }
 function renderMatchLineupPreview() {
   const el=document.getElementById('matchLineupPreview');
-  if(!matchParticipants.length){el.innerHTML='<span style="color:var(--text3)">출전 선수 없음</span>';return;}
+  if(!matchParticipants.length){el.innerHTML='<span style="color:var(--text3)">포메 탭에서 필드에 선수를 배치한 뒤 경기 기록을 열어주세요.<br><small style="font-size:10px">용병은 명단에서 임시 추가 후 필드에 배치하면 됩니다.</small></span>';return;}
   const starters=matchParticipants.filter(x=>x.type!=='sub');
   const subs=matchParticipants.filter(x=>x.type==='sub');
   el.innerHTML=`선발 ${starters.length}명`+(subs.length?` · 교체 ${subs.length}명`:'')+
@@ -2026,7 +2036,7 @@ function renderMatchLineupPreview() {
 function renderMatchModalEvents(em) {
   const list=document.getElementById('matchEventList');
   if(!matchParticipants.length){
-    list.innerHTML='<div style="font-size:13px;color:var(--text3)">포메이션에서 선수를 배치하거나 「현재 포메이션 반영」을 눌러주세요</div>';
+    list.innerHTML='<div style="font-size:13px;color:var(--text3)">포메 탭에서 필드에 선수를 배치한 뒤 「포메이션에서 불러오기」를 눌러주세요.<br><small style="font-size:10px">용병은 명단에서 임시 추가 → 필드 배치 → 불러오기</small></div>';
     document.getElementById('momSelectWrap').innerHTML='';
     renderMatchLineupPreview();
     return;
@@ -2073,7 +2083,6 @@ function openMatchModal(editId){
   document.getElementById('matchDate').value=em?.date||new Date().toISOString().slice(0,10);
   document.getElementById('matchScoreUs').value=em?.scoreUs??0;
   document.getElementById('matchScoreOpp').value=em?.scoreOpp??0;
-  document.getElementById('matchHomeAway').value=em?.homeAway||'home';
   matchMom=em?.mom||null;
   if(em) matchParticipants=buildParticipantsFromMatch(em);
   else matchParticipants=buildParticipantsFromField();
@@ -2098,7 +2107,7 @@ function saveMatch(){
   const date=document.getElementById('matchDate').value;
   const scoreUs=parseInt(document.getElementById('matchScoreUs').value)||0;
   const scoreOpp=parseInt(document.getElementById('matchScoreOpp').value)||0;
-  const homeAway=document.getElementById('matchHomeAway').value;
+  const homeAway=null; // 홈/어웨이 미사용 (하위호환용 null 유지)
   const totalGoals=matchParticipants.reduce((s,x)=>s+(matchEvents[x.pid]?.goals||0),0);
   if(totalGoals!==scoreUs){
     alert(`선수 골 합(${totalGoals})과 우리 팀 득점(${scoreUs})이 일치하지 않습니다.`);
@@ -2134,7 +2143,7 @@ function renderRecords(){
   if(!matches.length){el.innerHTML='<div class="empty-state">기록된 경기가 없습니다</div>';return;}
   el.innerHTML=matches.map(m=>{
     const res=m.scoreUs>m.scoreOpp?'🏆 승':m.scoreUs===m.scoreOpp?'🤝 무':'💔 패';
-    const haBadge=m.homeAway?`<span class="match-homeaway">${m.homeAway==='home'?'홈':'어웨이'}</span>`:'';
+
     const scorerRows=(m.scorers||[]).map(s=>`
       <div class="match-scorer-row">
         <span class="match-scorer-icon">⚽</span>
@@ -2152,7 +2161,7 @@ function renderRecords(){
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
         <span class="match-team">${m.oppTeam}</span>
       </div>
-      <div class="match-meta">${m.date} · ${res}${haBadge}<span class="match-formation-badge">${m.formation}</span>${momBadge}</div>
+      <div class="match-meta">${m.date} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}</div>
       ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">출전</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
       ${scorerRows?`<div class="match-scorers">${scorerRows}</div>`:''}
       ${isAdmin ? `<div class="match-card-btns">
@@ -2192,7 +2201,7 @@ function formatStreakPeriod(s) {
 function renderPersonalStats(filtered) {
   const sortKey = document.getElementById('statsSortKey')?.value || 'goals';
   const rows = computePlayerStats(filtered, players)
-    .filter(s => s.appearances > 0 || s.goals > 0 || s.assists > 0 || s.mom > 0)
+    .filter(s => s.attendance > 0 || s.goals > 0 || s.assists > 0 || s.mom > 0)
     .sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
   if (!filtered.length) {
     return '<div class="empty-state">경기 기록이 없습니다</div>';
@@ -2202,7 +2211,6 @@ function renderPersonalStats(filtered) {
   }
   const top = rows[0];
   const totalGoals = rows.reduce((s, r) => s + r.goals, 0);
-  const totalApps = rows.reduce((s, r) => s + r.appearances, 0);
   const summary = `<div class="stats-summary">
     <div class="stats-card"><div class="stats-card-val">${filtered.length}</div><div class="stats-card-label">경기</div></div>
     <div class="stats-card"><div class="stats-card-val">${totalGoals}</div><div class="stats-card-label">팀 골</div></div>
@@ -2213,43 +2221,33 @@ function renderPersonalStats(filtered) {
     const aCls = r.assists > 0 ? 'stat-click' : 'stat-click zero';
     return `<tr>
       <td><span class="stat-name">${r.name}</span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}</td>
-      <td>${r.appearances}</td>
+      <td>${r.attendance}</td>
       <td><span class="${gCls}" onclick="openStatHistory(${r.pid},'goals')">${r.goals}</span></td>
       <td><span class="${aCls}" onclick="openStatHistory(${r.pid},'assists')">${r.assists}</span></td>
       <td>${r.mom || '—'}</td>
-      <td>${r.attendance}<span class="stat-pct">%</span></td>
     </tr>`;
   }).join('');
   return summary + `<table class="stats-table">
-    <thead><tr><th>선수</th><th>출전</th><th>골</th><th>어시</th><th>MOM</th><th>참석</th></tr></thead>
+    <thead><tr><th>선수</th><th>출석수</th><th>골</th><th>어시</th><th>MOM</th></tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <div style="font-size:10px;color:var(--text3)">총 출전 ${totalApps}회 · 골·어시 숫자를 누르면 경기별 히스토리</div>`;
+  <div style="font-size:10px;color:var(--text3)">골·어시 숫자를 누르면 경기별 히스토리 · 출석 = 선발+교체+교체후보</div>`;
 }
 function renderTeamStats(filtered) {
   if (!filtered.length) {
     return '<div class="empty-state">경기 기록이 없습니다</div>';
   }
-  const venues = [
-    { key: 'all', label: '전체' },
-    { key: 'home', label: '홈' },
-    { key: 'away', label: '어웨이' },
-  ];
-  const tableRows = venues.map(v => {
-    const ms = filterMatchesByVenue(filtered, v.key);
-    const t = computeTeamStats(ms);
-    return `<tr>
-      <td>${v.label}</td>
-      <td>${t.played}</td>
-      <td>${t.w}</td>
-      <td>${t.d}</td>
-      <td>${t.l}</td>
-      <td>${t.gf}</td>
-      <td>${t.ga}</td>
-      <td>${t.winRate}%</td>
-    </tr>`;
-  }).join('');
   const overall = computeTeamStats(filtered);
+  const tableRows = `<tr>
+    <td>전체</td>
+    <td>${overall.played}</td>
+    <td>${overall.w}</td>
+    <td>${overall.d}</td>
+    <td>${overall.l}</td>
+    <td>${overall.gf}</td>
+    <td>${overall.ga}</td>
+    <td>${overall.winRate}%</td>
+  </tr>`;
   const streaks = computeStreaks(filtered);
   const total = overall.w + overall.d + overall.l || 1;
   const wPct = Math.round(overall.w / total * 100);

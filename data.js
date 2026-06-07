@@ -180,14 +180,14 @@ function filterMatchesByVenue(matches, venue) {
   return matches.filter(m => m.homeAway === venue);
 }
 function computePlayerStats(matches, players) {
-  const total = matches.length;
   const map = {};
   players.forEach(p => {
     map[p.id] = { pid: p.id, name: p.name, jersey: p.jersey, positions: p.positions,
-      appearances: 0, goals: 0, assists: 0, mom: 0, attendance: 0 };
+      attendance: 0, goals: 0, assists: 0, mom: 0 };
   });
   matches.forEach(m => {
-    matchParticipantPids(m).forEach(pid => { if (map[pid]) map[pid].appearances++; });
+    // 출석: 선발 + 교체 투입 + 교체 후보(subPid 등록 선수) 모두 포함
+    matchParticipantPids(m).forEach(pid => { if (map[pid]) map[pid].attendance++; });
     (m.scorers || []).forEach(s => {
       if (!map[s.pid]) return;
       map[s.pid].goals += s.goals || 0;
@@ -195,10 +195,7 @@ function computePlayerStats(matches, players) {
     });
     if (m.mom != null && map[m.mom]) map[m.mom].mom++;
   });
-  return Object.values(map).map(s => ({
-    ...s,
-    attendance: total ? Math.round(s.appearances / total * 100) : 0,
-  }));
+  return Object.values(map);
 }
 function computeTeamStats(matches) {
   const n = matches.length;

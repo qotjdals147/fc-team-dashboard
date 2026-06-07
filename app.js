@@ -64,29 +64,56 @@ function getFormationForSave() {
   if (fieldTokens.length) return inferFormationFromTokens(fieldTokens) || '4-3-3';
   return '';
 }
+// 포메이션 변경 시: 기존 pos 라벨 기준으로 새 슬롯에 재배치 (freeX/freeY 갱신)
+function remapTokensToNewFormation() {
+  const slots = getSlots();
+  const labels = getLabels();
+  if (!slots.length) return;
+
+  // slotIdx 가 겹치지 않도록 순서대로 배정
+  const claimed = new Set();
+
+  // 1차: pos 가 있는 토큰 → 포지션에 맞는 빈 슬롯 탐색
+  fieldTokens.forEach(ft => {
+    if (!ft.pos) return;
+    for (let i = 0; i < labels.length; i++) {
+      if (!claimed.has(i) && slotAcceptsPos(labels[i], ft.pos)) {
+        claimed.add(i);
+        ft.slotIdx = i;
+        ft.freeX = slots[i][0];
+        ft.freeY = slots[i][1];
+        return;
+      }
+    }
+    // 포지션 맞는 자리 없으면 slotIdx=-1 유지 (자유 위치)
+    ft.slotIdx = -1;
+  });
+
+  // 2차: pos 없는 토큰 → 남은 빈 슬롯에 순서대로
+  fieldTokens.forEach(ft => {
+    if (ft.slotIdx >= 0) return;
+    for (let i = 0; i < labels.length; i++) {
+      if (!claimed.has(i)) {
+        claimed.add(i);
+        ft.slotIdx = i;
+        ft.freeX = slots[i][0];
+        ft.freeY = slots[i][1];
+        ft.pos = labels[i];
+        return;
+      }
+    }
+  });
+}
 function reconcileFieldTokensToFormation() {
   const slots = getSlots();
   const labels = getLabels();
   if (!slots.length) return;
   fieldTokens.forEach(ft => {
-    if (ft.slotIdx >= 0 && ft.slotIdx < labels.length) {
+    if (ft.slotIdx >= 0 && ft.slotIdx < slots.length) {
+      // 기존 slotIdx 유효 → 좌표만 새 포메이션 기준으로 갱신
+      ft.freeX = slots[ft.slotIdx][0];
+      ft.freeY = slots[ft.slotIdx][1];
       if (!ft.pos) ft.pos = labels[ft.slotIdx];
-      return;
-    }
-    const near = (ft.freeX != null && ft.freeY != null)
-      ? findNearestSlot(ft.pid, ft.freeX, ft.freeY) : -1;
-    if (near >= 0 && !tokenAtSlot(near, ft.pid)) {
-      ft.slotIdx = near;
-      ft.pos = labels[near];
-      return;
-    }
-    if (ft.pos) {
-      const idx = findBestSlot(ft.pos, slots, labels, ft.pid);
-      if (idx >= 0) {
-        ft.slotIdx = idx;
-        ft.freeX = slots[idx][0];
-        ft.freeY = slots[idx][1];
-      }
     }
   });
 }
@@ -156,8 +183,14 @@ function countSlotsByPos(pos) {
   return labels.filter(l => slotAcceptsPos(l, pos)).length;
 }
 function countFieldByPos(pos, excludePid) {
-  // 현재 필드에 이 포지션으로 배치된 선수 수
-  return fieldTokens.filter(t => t.pid !== excludePid && t.pos === pos).length;
+  // slotIdx >= 0 인 토큰만 카운트 (자유 위치 토큰은 슬롯 점유 안 함)
+  const labels = getLabels();
+  return fieldTokens.filter(t =>
+    t.pid !== excludePid &&
+    t.slotIdx >= 0 &&
+    t.slotIdx < labels.length &&
+    slotAcceptsPos(labels[t.slotIdx], pos)
+  ).length;
 }
 function checkSlotCapacity(pos, excludePid) {
   // return null = OK, string = 오류 메시지
@@ -261,7 +294,7 @@ async function bootstrapApp() {
   document.getElementById('formationSelect').addEventListener('change', () => {
     const f = getFormation();
     if (f) saveFormationLocal(f);
-    reconcileFieldTokensToFormation();
+    remapTokensToNewFormation();
     slotHighlight = -1;
     drawFieldCanvas(-1);
     renderField();
@@ -287,8 +320,11 @@ async function persistMeta() {
 function normalizePhotoUrl(url) {
   if (!url) return '';
   const u = url.trim();
+  // Google Drive
   const fileId = u.match(/\/file\/d\/([^/]+)/)?.[1] || (u.includes('drive.google.com') && u.match(/[?&]id=([^&]+)/)?.[1]);
   if (fileId) return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  // OneDrive / Windows 공유 링크 → 직접 표시 불가
+  if (/onedrive\.live\.com|1drv\.ms|sharepoint\.com/i.test(u)) return '__onedrive__';
   return u;
 }
 
@@ -334,7 +370,12 @@ function saveTeamPhotoUrl() {
   const raw = document.getElementById('photoUrlInput').value.trim();
   if (!raw) { alert('URL을 입력해주세요'); return; }
   if (!/^https?:\/\//i.test(raw)) { alert('http:// 또는 https:// 로 시작하는 주소를 입력해주세요'); return; }
-  teamPhotoUrl = normalizePhotoUrl(raw);
+  const normalized = normalizePhotoUrl(raw);
+  if (normalized === '__onedrive__') {
+    alert('OneDrive/윈도우 공유 링크는 외부에서 직접 표시할 수 없습니다.\n\n사진을 등록하려면:\n① Google Drive에 업로드 후 공유 링크\n② 이미지 호스팅 사이트(예: Imgur)에 업로드 후 직접 링크\n를 사용해 주세요.');
+    return;
+  }
+  teamPhotoUrl = normalized;
   persistMeta().then(() => {
     closePhotoUrlModal();
     renderHome();
@@ -532,7 +573,7 @@ function findBestEmptySlotForPlayer(p) {
   return bestIdx;
 }
 function autoPlaceFromBench(pid) {
-  if (!isFormationSelected()) { alertFormationRequired(); return false; }
+  if (!isFormationSelected()) return false;  // 포메이션 미선택 시 팝업으로 안내
   if (fieldTokens.length >= MAX_FIELD) {
     alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);
     return false;
@@ -605,6 +646,7 @@ function openFieldPosGrid(pid) {
   document.getElementById('posPopupSubBtn').style.display = 'block';
   const popup = document.getElementById('posPopup');
   popup.classList.add('open', 'wide');
+  document.getElementById('popupOverlay').style.display = 'block';
 }
 function handlePlayerTap(pid, anchorEl, fromBench) {
   if (fromBench) {
@@ -731,11 +773,12 @@ function _showPopupAt(anchorEl) {
   const popup=document.getElementById('posPopup');
   popup.style.left=left+'px'; popup.style.top=top+'px';
   popup.classList.add('open');
+  document.getElementById('popupOverlay').style.display='block';
 }
 
 function closePosPopup() {
-  const popup = document.getElementById('posPopup');
-  popup.classList.remove('open', 'wide');
+  document.getElementById('posPopup').classList.remove('open', 'wide');
+  document.getElementById('popupOverlay').style.display='none';
   popupTargetPid = null;
   popupMode = 'pos';
   const grid = document.getElementById('posPopupGrid');
@@ -820,11 +863,7 @@ function clearSubPlayer() {
   saveFieldState(); closePosPopup(); renderField();
 }
 
-document.addEventListener('click',function(e){
-  const pp=document.getElementById('posPopup');
-  if(pp.classList.contains('open')&&!e.target.closest('.pos-popup')&&!e.target.closest('.player-token')&&!e.target.closest('.bench-player'))
-    closePosPopup();
-});
+// 팝업 닫기는 오버레이(#popupOverlay) onclick으로 처리
 
 // ── 슬롯 탐색 ──
 function slotAcceptsPos(slotLabel, pos) { return (SLOT_LABEL_MATCH[slotLabel]||[slotLabel]).includes(pos); }
@@ -955,6 +994,25 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   const ovr = getOvr(p, pos);
   const r = 18 * sc;
   const color = posColor(p.positions);
+  // OVR 별 아치 — 원 그리기 전에 먼저 그려서 원이 덮어쓰게 함
+  if (ovr != null) {
+    const n = ovrStarCount(ovr);
+    const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
+    // arcTop(tv=0 최상단) = circle top 에서 28px 위, arcH = 14px → 전체 범위가 circle top 위에 위치
+    const arcW = 54 * sc;
+    const arcTop = cy - r - 28 * sc;
+    const arcH = 14 * sc;
+    ctx.font = `${7 * sc}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    pts.forEach(([l, tv]) => {
+      const ax = cx - arcW / 2 + (l / 100) * arcW;
+      const ay = arcTop + (tv / 22) * arcH;
+      ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
+      ctx.fillText('★', ax, ay);
+    });
+  }
+  // 원(circle) — 별 위에 겹쳐 그려 원 안으로 들어간 별을 가림
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 4 * sc;
@@ -966,12 +1024,15 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   ctx.lineWidth = 2 * sc;
   ctx.stroke();
   ctx.shadowBlur = 0;
+  ctx.restore();
   ctx.fillStyle = '#fff';
   ctx.font = `bold ${12 * sc}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(p.name.slice(0, 2), cx, cy);
   if (pos) {
+    ctx.font = `bold ${8 * sc}px sans-serif`;
+    ctx.textAlign = 'center';
     const bw = Math.max(ctx.measureText(pos).width + 8 * sc, 22 * sc);
     const bx = cx - bw / 2;
     const by = cy - r - 10 * sc;
@@ -979,7 +1040,6 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
     canvasRoundRect(ctx, bx, by, bw, 12 * sc, 4 * sc);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${8 * sc}px sans-serif`;
     ctx.fillText(pos, cx, by + 6 * sc);
   }
   const name = `${p.jersey ? p.jersey + ' ' : ''}${p.name}`;
@@ -987,22 +1047,11 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = 'rgba(0,0,0,0.85)';
   ctx.lineWidth = 3 * sc;
+  ctx.textAlign = 'center';
   ctx.strokeText(name, cx, cy + r + 10 * sc);
   ctx.fillText(name, cx, cy + r + 10 * sc);
   if (ovr != null) {
     const n = ovrStarCount(ovr);
-    const arcR = r + 8 * sc;
-    const arcLayouts = STAR_ARC_LAYOUT;
-    const pts = arcLayouts[n] || arcLayouts[1];
-    ctx.font = `${8 * sc}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    pts.forEach(([l, t]) => {
-      const ax = cx + ((l - 50) / 50) * arcR * 0.9;
-      const ay = cy - r - 4 * sc + (t / 22) * 10 * sc;
-      ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
-      ctx.fillText('★', ax, ay);
-    });
     const ovrText = `OVR+ ${Math.round(ovr)}`;
     ctx.font = `bold ${8 * sc}px sans-serif`;
     const ovrY = cy + r + 22 * sc;
@@ -1126,32 +1175,35 @@ function findNearestSlot(excludePid,nx,ny){
   slots.forEach((sl,i)=>{const d=Math.hypot(sl[0]-nx,sl[1]-ny);if(d<bd){bd=d;best=i;}});
   return best;
 }
-/** 슬롯에 스냅 시 해당 슬롯 역할(ST, RB 등)로 포지션 자동 반영 */
-function applySlotSnap(ft, nearSlot, nx, ny, pid) {
+/** 슬롯에 스냅 — 슬롯 정중앙으로 고정, 교체 처리 포함
+ *  드래그는 용량 체크 없음 (팝업 포지션 선택에서만 체크)
+ */
+function applySlotSnap(ft, nearSlot, pid, wasFromBench) {
   const labels = getLabels();
   const slots = getSlots();
   const slotPos = labels[nearSlot] || '';
   const other = tokenAtSlot(nearSlot, pid);
-
-  if (!other && slotPos) {
-    const err = checkSlotCapacity(slotPos, pid);
-    if (err) { alert(err); return false; }
-  }
-
-  const prevSlot = ft.slotIdx;
-  const prevFX = ft.freeX ?? slots[prevSlot]?.[0] ?? 0.5;
-  const prevFY = ft.freeY ?? slots[prevSlot]?.[1] ?? 0.5;
+  const snapX = slots[nearSlot][0];
+  const snapY = slots[nearSlot][1];
 
   if (other) {
-    other.slotIdx = prevSlot;
-    other.freeX = prevSlot >= 0 ? slots[prevSlot]?.[0] ?? prevFX : prevFX;
-    other.freeY = prevSlot >= 0 ? slots[prevSlot]?.[1] ?? prevFY : prevFY;
-    if (prevSlot >= 0 && labels[prevSlot]) other.pos = labels[prevSlot];
+    if (wasFromBench) {
+      // 벤치→필드: 기존 선수 벤치로 내보내기
+      fieldTokens = fieldTokens.filter(t => t.pid !== other.pid);
+    } else {
+      // 필드→필드 swap
+      const prevSlot = ft.slotIdx;
+      other.slotIdx = prevSlot;
+      other.freeX = prevSlot >= 0 ? slots[prevSlot]?.[0] ?? ft.freeX : ft.freeX;
+      other.freeY = prevSlot >= 0 ? slots[prevSlot]?.[1] ?? ft.freeY : ft.freeY;
+      if (prevSlot >= 0 && labels[prevSlot]) other.pos = labels[prevSlot];
+    }
   }
+  // 드래그는 빈 슬롯 용량 체크 없이 무조건 허용
 
   ft.slotIdx = nearSlot;
-  ft.freeX = nx;
-  ft.freeY = ny;
+  ft.freeX = snapX;
+  ft.freeY = snapY;
   if (slotPos) ft.pos = slotPos;
   return true;
 }
@@ -1190,14 +1242,14 @@ function renderField() {
 }
 
 // ── 전역 드래그 ──
-let drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
+let drag={active:false,pid:null,fromBench:false,origFromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
 const LONG_PRESS=200, MOVE_THRESH=6;
 function onTokenMouseDown(e){e.preventDefault();startDrag(parseInt(this.dataset.pid),false,e.clientX,e.clientY,this);}
 function onTokenTouchStart(e){e.preventDefault();startDrag(parseInt(this.dataset.pid),false,e.touches[0].clientX,e.touches[0].clientY,this);}
 function startDrag(pid,fromBench,ex,ey,el){
   if(drag.longPressTimer){clearTimeout(drag.longPressTimer);drag.longPressTimer=null;}
   if(drag.el)drag.el.classList.remove('dragging','snapping');
-  drag={active:false,pid,fromBench,startX:ex,startY:ey,moved:false,longPressTimer:null,el};
+  drag={active:false,pid,fromBench,origFromBench:fromBench,startX:ex,startY:ey,moved:false,longPressTimer:null,el};
   drag.longPressTimer=setTimeout(()=>{
     drag.active=true;drag.el.classList.add('dragging');
     const { x, y } = tokenXY(fieldTokens.find(t => t.pid === pid) || { slotIdx: -1, freeX: 0.5, freeY: 0.5 });
@@ -1262,7 +1314,7 @@ function onGlobalUp(e){
   if(drag.pid===null)return;
   clearTimeout(drag.longPressTimer);drag.longPressTimer=null;
   const ex=e.clientX, ey=e.clientY;
-  const pid=drag.pid,wasActive=drag.active,wasMoved=drag.moved,wasFromBench=drag.fromBench,el=drag.el;
+  const pid=drag.pid,wasActive=drag.active,wasMoved=drag.moved,wasFromBench=drag.origFromBench,el=drag.el;
   drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
   if(el)el.classList.remove('dragging','snapping');
   slotHighlight = -1;
@@ -1282,7 +1334,7 @@ function onGlobalUp(e){
 
     const nearSlot=findNearestSlot(pid,nx,ny);
     if(nearSlot>=0){
-      if (!applySlotSnap(ft, nearSlot, nx, ny, pid)) {
+      if (!applySlotSnap(ft, nearSlot, pid, wasFromBench)) {
         ft.slotIdx=-1; ft.freeX=nx; ft.freeY=ny;
       }
     } else {

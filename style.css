@@ -135,6 +135,7 @@ body { font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; backgro
 .ovr-row .ovr-star-preview { width:60px; font-size:11px; }
 
 /* ── 포지션 팝업 ── */
+#popupOverlay { display:none; position:fixed; inset:0; z-index:299; }
 .pos-popup { display:none; position:fixed; z-index:300; background:var(--bg); border:1px solid var(--border2); border-radius:var(--radius-lg); padding:10px; box-shadow:0 4px 20px rgba(0,0,0,0.18); max-width:230px; max-height:min(70vh,420px); overflow-y:auto; }
 .pos-popup.wide { max-width:280px; }
 .pos-popup.open { display:block; }

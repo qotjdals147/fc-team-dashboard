@@ -27,6 +27,45 @@ function slotDefaultXY(i) {
   const slots = getSlots();
   return slots[i] ? { x: slots[i][0], y: slots[i][1] } : { x: 0.5, y: 0.5 };
 }
+
+const STAR_ARC_LAYOUT = {
+  1: [[50, 2]],
+  2: [[30, 10], [70, 10]],
+  3: [[20, 16], [50, 2], [80, 16]],
+  4: [[14, 20], [36, 6], [64, 6], [86, 20]],
+  5: [[10, 22], [28, 8], [50, 0], [72, 8], [90, 22]],
+};
+function tokenStarArcHtml(ovr) {
+  const n = ovrStarCount(ovr);
+  if (!n) return '';
+  const tier = ovrStarTier(ovr);
+  const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
+  const stars = pts.map(([l, t]) =>
+    `<span class="token-star" style="left:${l}%;top:${t}%">★</span>`
+  ).join('');
+  return `<div class="token-star-arc ${tier}">${stars}</div>`;
+}
+function tokenOvrPillHtml(ovr) {
+  if (ovr == null) return '';
+  const tier = ovrStarTier(ovr);
+  return `<div class="token-ovr-pill ${tier}"><span class="token-ovr-label">OVR+</span><span class="token-ovr-val">${Math.round(ovr)}</span></div>`;
+}
+function buildTokenInnerHtml(p, pos, ovr, subPid) {
+  let subStr = '';
+  if (subPid) {
+    const subP = players.find(x => x.id === subPid);
+    if (subP) subStr = `<div class="token-sub">🔄 ${subP.jersey != null ? subP.jersey + ' ' : ''}${subP.name}</div>`;
+  }
+  return `<div class="token-avatar-wrap">
+    ${ovr != null ? tokenStarArcHtml(ovr) : ''}
+    <div class="token-circle" style="background:${posColor(p.positions)}">
+      ${p.name.slice(0, 2)}
+      ${pos ? `<span class="token-pos-badge">${pos}</span>` : ''}
+    </div>
+  </div>
+  <div class="token-name">${p.jersey != null ? p.jersey + ' ' : ''}${p.name}</div>
+  ${tokenOvrPillHtml(ovr)}${subStr}`;
+}
 function tokenAtSlot(slotIdx, excludePid) {
   return fieldTokens.find(t => t.slotIdx === slotIdx && t.pid !== excludePid);
 }
@@ -743,11 +782,27 @@ function drawExportToken(ctx, p, t, cx, cy, sc) {
   ctx.strokeText(name, cx, cy + r + 10 * sc);
   ctx.fillText(name, cx, cy + r + 10 * sc);
   if (ovr != null) {
-    const ovrText = `${ovr} ${ovrStarsText(ovr)}`;
-    ctx.font = `${9 * sc}px sans-serif`;
+    const n = ovrStarCount(ovr);
+    const arcR = r + 8 * sc;
+    const arcLayouts = STAR_ARC_LAYOUT;
+    const pts = arcLayouts[n] || arcLayouts[1];
+    ctx.font = `${8 * sc}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    pts.forEach(([l, t]) => {
+      const ax = cx + ((l - 50) / 50) * arcR * 0.9;
+      const ay = cy - r - 4 * sc + (t / 22) * 10 * sc;
+      ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
+      ctx.fillText('★', ax, ay);
+    });
+    const ovrText = `OVR+ ${Math.round(ovr)}`;
+    ctx.font = `bold ${8 * sc}px sans-serif`;
     const ovrY = cy + r + 22 * sc;
-    ctx.strokeText(ovrText, cx, ovrY);
-    ctx.fillStyle = ovr > 80 ? '#ffd700' : 'rgba(255,255,255,0.95)';
+    const tw = ctx.measureText(ovrText).width + 10 * sc;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    canvasRoundRect(ctx, cx - tw / 2, ovrY - 6 * sc, tw, 12 * sc, 4 * sc);
+    ctx.fill();
+    ctx.fillStyle = n >= 5 ? '#ffd700' : '#fff';
     ctx.fillText(ovrText, cx, ovrY);
   }
   if (t.subPid) {
@@ -888,22 +943,7 @@ function renderField() {
     el.style.left=left+'px'; el.style.top=top+'px';
     el.dataset.pid=t.pid;
 
-    const isElite=ovr!=null&&ovr>80;
-    const ovrStr=ovr!=null?`<div class="token-ovr${isElite?' elite':''}">${ovr} ${ovrStarsText(ovr)}</div>`:'';
-
-    // 교체 예정 표시
-    let subStr='';
-    if(t.subPid){
-      const subP=players.find(x=>x.id===t.subPid);
-      if(subP) subStr=`<div class="token-sub">🔄 ${subP.jersey?subP.jersey+' ':''}${subP.name}</div>`;
-    }
-
-    // 순서: 포지션뱃지(원 위) → 이름 → OVR → 🔄교체예정
-    el.innerHTML=`<div class="token-circle" style="background:${posColor(p.positions)}">
-      ${p.name.slice(0,2)}${pos?`<span class="token-pos-badge">${pos}</span>`:''}
-    </div>
-    <div class="token-name">${p.jersey?p.jersey+' ':''}${p.name}</div>
-    ${ovrStr}${subStr}`;
+    el.innerHTML = buildTokenInnerHtml(p, pos, ovr, t.subPid);
     el.addEventListener('mousedown',onTokenMouseDown);
     el.addEventListener('touchstart',onTokenTouchStart,{passive:false});
     td.appendChild(el);
@@ -956,9 +996,7 @@ function onGlobalMove(e){
         newEl.style.left='0px';newEl.style.top='0px';
         const pos=p.positions[0]||'';
         const ovr=getOvr(p,pos);
-        const isElite=ovr!=null&&ovr>80;
-        const ovrStr=ovr!=null?`<div class="token-ovr${isElite?' elite':''}">${ovr} ${ovrStarsText(ovr)}</div>`:'';
-        newEl.innerHTML=`<div class="token-circle" style="background:${posColor(p.positions)}">${p.name.slice(0,2)}${pos?`<span class="token-pos-badge">${pos}</span>`:''}</div><div class="token-name">${p.jersey?p.jersey+' ':''}${p.name}</div>${ovrStr}`;
+        newEl.innerHTML = buildTokenInnerHtml(p, pos, ovr, null);
         newEl.addEventListener('mousedown',onTokenMouseDown);
         newEl.addEventListener('touchstart',onTokenTouchStart,{passive:false});
         td.appendChild(newEl);

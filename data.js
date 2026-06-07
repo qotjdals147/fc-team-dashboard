@@ -68,6 +68,15 @@ function ovrStars(ovr) {
   return `<span class="ovr-stars" style="color:${color}">${stars}</span>`;
 }
 function ovrStarsText(ovr) { const n=ovrStarCount(ovr); return n>0?'★'.repeat(n):''; }
+function ovrStarTier(ovr) {
+  const n = ovrStarCount(ovr);
+  if (n >= 5) return 'tier-5';
+  if (n >= 4) return 'tier-4';
+  if (n >= 3) return 'tier-3';
+  if (n >= 2) return 'tier-2';
+  if (n >= 1) return 'tier-1';
+  return '';
+}
 function getOvr(p,pos) {
   if(!p.positions?.length)return null;
   if(!p.ovr)p.ovr={};

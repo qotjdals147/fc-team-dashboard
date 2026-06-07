@@ -162,15 +162,45 @@ body { font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; backgro
 .field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; }
 #tokens { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
 #tokens .player-token { pointer-events:auto; }
-.player-token { position:absolute; width:62px; height:82px; transform:translate(-50%,-50%); touch-action:none; display:flex; flex-direction:column; align-items:center; justify-content:center; user-select:none; z-index:10; cursor:pointer; }
+.player-token { position:absolute; width:64px; transform:translate(-50%,-50%); touch-action:none; display:flex; flex-direction:column; align-items:center; user-select:none; z-index:10; cursor:pointer; }
 .player-token.dragging { cursor:grabbing; z-index:50; }
+.token-avatar-wrap { position:relative; width:36px; height:36px; margin-top:10px; }
+.token-star-arc { position:absolute; left:50%; top:-12px; width:54px; height:20px; transform:translateX(-50%); pointer-events:none; }
+.token-star-arc .token-star { position:absolute; transform:translate(-50%,-50%); font-size:9px; line-height:1; }
+.token-star-arc.tier-1 .token-star { color:#b8bcc4; text-shadow:0 1px 2px rgba(0,0,0,0.8); }
+.token-star-arc.tier-2 .token-star { color:#d8dce6; text-shadow:0 0 3px rgba(255,255,255,0.4), 0 1px 2px rgba(0,0,0,0.8); }
+.token-star-arc.tier-3 .token-star {
+  background:linear-gradient(180deg,#f0e6c8,#c9a227);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,0.7));
+}
+.token-star-arc.tier-4 .token-star {
+  background:linear-gradient(180deg,#fff7c2,#ffd700,#b8860b);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 3px rgba(255,200,0,0.6));
+}
+.token-star-arc.tier-5 .token-star {
+  background:linear-gradient(120deg,#1a1a1a 0%,#ffd700 25%,#fff 40%,#c084fc 55%,#22d3ee 70%,#ffd700 85%,#1a1a1a 100%);
+  background-size:220% auto;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 4px rgba(255,215,0,0.7));
+  animation:token-star-holo 4s linear infinite;
+}
+@keyframes token-star-holo { 0%{background-position:0% center} 100%{background-position:220% center} }
 .token-circle { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; border:2px solid rgba(255,255,255,0.75); box-shadow:0 2px 6px rgba(0,0,0,0.4); transition:transform 0.1s; position:relative; }
-.token-pos-badge { position:absolute; top:-9px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#fff; font-size:8px; font-weight:700; padding:1px 5px; border-radius:4px; white-space:nowrap; pointer-events:none; line-height:1.5; }
+.token-pos-badge { position:absolute; top:-9px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#fff; font-size:8px; font-weight:700; padding:1px 5px; border-radius:4px; white-space:nowrap; pointer-events:none; line-height:1.5; z-index:2; }
 .player-token.snapping .token-circle { transform:scale(1.15); box-shadow:0 0 0 3px rgba(255,255,255,0.6),0 2px 8px rgba(0,0,0,0.5); }
-.token-name { font-size:10px; font-weight:600; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.9); margin-top:2px; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; text-align:center; }
-.token-ovr { font-size:9px; color:rgba(255,255,255,0.95); text-shadow:0 1px 2px rgba(0,0,0,0.9); line-height:1; margin-top:2px; white-space:nowrap; text-align:center; letter-spacing:0; }
-.token-ovr.elite { color:#ffd700; text-shadow:0 0 5px rgba(180,140,0,0.95), 0 1px 2px rgba(0,0,0,0.8); font-weight:700; }
-.token-sub { font-size:9px; font-weight:600; color:#ffe066; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:5px; margin-top:3px; white-space:nowrap; max-width:62px; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.4; }
+.token-name { font-size:10px; font-weight:600; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.9); margin-top:3px; white-space:nowrap; max-width:64px; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+.token-ovr-pill { display:inline-flex; align-items:center; gap:3px; margin-top:2px; padding:2px 7px; border-radius:6px; background:rgba(0,0,0,0.58); border:1px solid rgba(255,255,255,0.18); line-height:1; }
+.token-ovr-label { font-size:7px; font-weight:700; color:rgba(255,255,255,0.55); letter-spacing:0.3px; }
+.token-ovr-val { font-size:10px; font-weight:800; color:#fff; }
+.token-ovr-pill.tier-3 { border-color:rgba(201,162,39,0.45); }
+.token-ovr-pill.tier-3 .token-ovr-val { color:#f5e6a8; }
+.token-ovr-pill.tier-4 { border-color:rgba(255,215,0,0.5); box-shadow:0 0 6px rgba(255,200,0,0.2); }
+.token-ovr-pill.tier-4 .token-ovr-val { color:#ffd700; }
+.token-ovr-pill.tier-5 { border-color:rgba(255,215,0,0.65); background:rgba(10,10,10,0.72); box-shadow:0 0 8px rgba(255,215,0,0.25); }
+.token-ovr-pill.tier-5 .token-ovr-val { background:linear-gradient(90deg,#ffd700,#fff,#c084fc); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.token-sub { font-size:9px; font-weight:600; color:#ffe066; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:5px; margin-top:3px; white-space:nowrap; max-width:64px; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.4; }
 .slot-info { position:absolute; top:10px; right:20px; font-size:11px; color:rgba(255,255,255,0.85); background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; pointer-events:none; }
 .bench-section { padding:7px 12px 9px; border-top:1px solid var(--border); flex-shrink:0; }
 .bench-title { font-size:10px; color:var(--text3); font-weight:500; margin-bottom:5px; }

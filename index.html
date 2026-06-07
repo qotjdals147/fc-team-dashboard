@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>우리 FC 팀 매니저</title>
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=24">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
 <div id="app">
 
-<div id="syncBar" class="sync-bar loading"><span id="syncDot" class="sync-dot"></span><span id="syncText">연결 중...</span></div>
+<div id="syncBar" class="sync-bar admin-only loading"><span id="syncDot" class="sync-dot"></span><span id="syncText">연결 중...</span></div>
 
 <!-- 탭 바 -->
 <div class="tab-bar">
@@ -18,7 +18,8 @@
   <button class="tab-btn" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
   <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-layout-grid"></i>포메</button>
   <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기</button>
-  <button class="tab-btn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
+  <button class="tab-btn admin-only" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
+  <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">🔒</button>
 </div>
 
 <!-- 홈 탭 패널 -->
@@ -30,11 +31,11 @@
         <i class="ti ti-photo"></i>
         <span>단체 사진을 등록해주세요</span>
       </div>
-      <button type="button" class="btn-photo-change" onclick="openPhotoUrlModal()"><i class="ti ti-link"></i> 사진 링크</button>
+      <button type="button" class="btn-photo-change admin-only" onclick="openPhotoUrlModal()"><i class="ti ti-link"></i> 사진 링크</button>
     </div>
     <div class="home-team-row">
       <h2 class="home-team-name" id="homeTeamName">우리 FC</h2>
-      <button type="button" class="btn-team-edit" onclick="editTeamName()" title="이름 수정"><i class="ti ti-pencil"></i></button>
+      <button type="button" class="btn-team-edit admin-only" onclick="editTeamName()" title="이름 수정"><i class="ti ti-pencil"></i></button>
     </div>
     <div class="home-members">
       <div class="home-members-title">클럽원 <span id="homeMemberCount"></span></div>
@@ -49,7 +50,7 @@
     <h2>선수 명단</h2>
     <div class="header-btns">
       <button class="btn-sort" onclick="sortByPosition()"><i class="ti ti-arrows-sort"></i> 포지션순</button>
-      <button class="btn-add" onclick="openAddModal()"><i class="ti ti-plus"></i> 추가</button>
+      <button class="btn-add admin-only" onclick="openAddModal()"><i class="ti ti-plus"></i> 추가</button>
     </div>
   </div>
   <div class="player-list" id="playerList"></div>
@@ -57,7 +58,8 @@
 
 <!-- 포메이션 탭 패널 -->
 <div id="tab-formation" class="tab-panel">
-  <div class="formation-toolbar">
+  <div class="formation-view-label" id="formationViewLabel"></div>
+  <div class="formation-toolbar admin-only">
     <label>포메이션</label>
     <select class="formation-select" id="formationSelect">
       <option value="">포메이션 선택</option>
@@ -75,7 +77,7 @@
     <button class="btn-reset-field" onclick="clearField()">초기화</button>
   </div>
   <!-- 저장된 포메이션 패널 -->
-  <div class="formation-saves-panel" id="formationSavesPanel" style="display:none">
+  <div class="formation-saves-panel admin-only" id="formationSavesPanel" style="display:none">
     <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
     <div class="fsave-list" id="formationSavesList"></div>
   </div>
@@ -88,7 +90,7 @@
   </div>
   <!-- 벤치 섹션 아래 -->
   <div class="bench-section">
-    <div class="bench-title">탭 → 자동 배치 · 드래그 → 원하는 자리 · 🔄 → 출전 교체</div>
+    <div class="bench-title admin-only">탭 → 자동 배치 · 드래그 → 원하는 자리 · 🔄 → 출전 교체</div>
     <div class="bench-list" id="benchList"></div>
   </div>
 </div>
@@ -115,7 +117,7 @@
 <!-- 경기기록 탭 패널 -->
 <div id="tab-records" class="tab-panel">
   <div class="records-wrap">
-    <button class="btn-new-record" onclick="openMatchModal()"><i class="ti ti-plus"></i> 경기 결과 기록</button>
+    <button class="btn-new-record admin-only" onclick="openMatchModal()"><i class="ti ti-plus"></i> 경기 결과 기록</button>
     <div class="records-section-title">경기 결과</div>
     <div id="recordsContent"></div>
   </div>
@@ -229,6 +231,21 @@
   </div>
 </div>
 
+<!-- 관리자 인증 모달 -->
+<div class="modal-bg" id="adminModal">
+  <div class="modal modal-sm">
+    <h3>🔐 관리자 인증</h3>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 14px">관리자 암호를 입력해주세요</p>
+    <div class="form-field">
+      <input type="password" id="adminPwInput" inputmode="numeric" placeholder="암호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitAdminPw()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAdminModal()">취소</button>
+      <button class="btn-save-modal" onclick="submitAdminPw()">확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- 단체 사진 링크 모달 -->
 <div class="modal-bg" id="photoUrlModal">
   <div class="modal modal-sm">
@@ -261,8 +278,8 @@
   </div>
 </div>
 
-<script src="data.js?v=22"></script>
-<script src="api.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="data.js?v=24"></script>
+<script src="api.js?v=24"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>

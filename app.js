@@ -1,3 +1,63 @@
+// ── 관리자 모드 ──
+const ADMIN_PW = '0607';
+let isAdmin = sessionStorage.getItem('fc_admin') === '1';
+
+function applyAdminMode() {
+  document.body.classList.toggle('is-admin', isAdmin);
+  const btn = document.getElementById('adminToggleBtn');
+  if (btn) {
+    btn.textContent = isAdmin ? '🔓' : '🔒';
+    btn.title = isAdmin ? '관리자 모드 해제' : '관리자 모드 진입';
+    btn.classList.toggle('active', isAdmin);
+  }
+  // 비관리자가 통계 탭에 있으면 홈으로
+  if (!isAdmin && document.getElementById('tab-stats')?.classList.contains('active')) {
+    switchTab('home');
+  }
+  // 포메이션 뷰 레이블 업데이트
+  const vl = document.getElementById('formationViewLabel');
+  if (vl) vl.textContent = getFormation() || '';
+  // 동적 렌더 요소 재렌더 (편집 버튼 포함 여부 반영)
+  renderRoster();
+  renderRecords();
+}
+
+function toggleAdminMode() {
+  if (isAdmin) {
+    if (!confirm('관리자 모드를 해제하시겠습니까?')) return;
+    isAdmin = false;
+    sessionStorage.removeItem('fc_admin');
+    applyAdminMode();
+  } else {
+    openAdminModal();
+  }
+}
+
+function openAdminModal() {
+  const inp = document.getElementById('adminPwInput');
+  if (inp) inp.value = '';
+  document.getElementById('adminModal').classList.add('open');
+  setTimeout(() => document.getElementById('adminPwInput')?.focus(), 150);
+}
+
+function closeAdminModal() {
+  document.getElementById('adminModal').classList.remove('open');
+}
+
+function submitAdminPw() {
+  const pw = document.getElementById('adminPwInput')?.value ?? '';
+  if (pw === ADMIN_PW) {
+    isAdmin = true;
+    sessionStorage.setItem('fc_admin', '1');
+    closeAdminModal();
+    applyAdminMode();
+  } else {
+    alert('암호가 틀렸습니다');
+    const inp = document.getElementById('adminPwInput');
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+}
+
 // ── 상태 ──
 // fieldTokens: { pid, slotIdx, freeX, freeY, pos, subPid? }
 // slotIdx >= 0 → 어느 포메이션 슬롯(역할)인지 / freeX·freeY → 실제 화면 좌표(미세 조정)
@@ -331,7 +391,12 @@ async function bootstrapApp() {
     drawFieldCanvas(-1);
     renderField();
     persistField().catch(handleSaveError);
+    // 비관리자용 포메이션 레이블 갱신
+    const vl = document.getElementById('formationViewLabel');
+    if (vl) vl.textContent = f || '';
   });
+  // 초기 관리자 모드 적용 (세션 복원 포함)
+  applyAdminMode();
 }
 async function persistPlayers() { await apiSavePartial({ players }); }
 async function persistField() {
@@ -392,7 +457,7 @@ function initPhotoDrag() {
   // 마우스 드래그
   wrap.addEventListener('mousedown', e => {
     if (e.target.closest('button')) return;
-    if (!teamPhotoUrl) return;
+    if (!isAdmin || !teamPhotoUrl) return;
     pd = { active: true, startX: e.clientX, startY: e.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
     wrap.style.cursor = 'grabbing';
     e.preventDefault();
@@ -413,6 +478,7 @@ function initPhotoDrag() {
   // 터치 드래그
   let pinchDist0 = 0, pinchScale0 = 1;
   wrap.addEventListener('touchstart', e => {
+    if (!isAdmin || !teamPhotoUrl) return;
     if (e.touches.length === 1) {
       const t = e.touches[0];
       pd = { active: true, startX: t.clientX, startY: t.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
@@ -441,7 +507,7 @@ function initPhotoDrag() {
   });
   // 마우스 휠 줌
   wrap.addEventListener('wheel', e => {
-    if (!teamPhotoUrl) return;
+    if (!isAdmin || !teamPhotoUrl) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     photoTransform.scale = Math.max(0.3, Math.min(4, photoTransform.scale + delta));
@@ -457,6 +523,7 @@ function renderHome() {
   if (img && ph) {
     if (teamPhotoUrl) {
       img.src = teamPhotoUrl;
+      img.draggable = false;
       img.style.display = 'block';
       ph.style.display = 'none';
       img.onerror = () => { img.style.display = 'none'; ph.style.display = 'flex'; };
@@ -568,17 +635,18 @@ function renderRoster() {
     }).join('');
     const jersey = p.jersey != null ? p.jersey : '—';
     return `<div class="player-card">
-      <div class="num-ctrl">
+      ${isAdmin ? `<div class="num-ctrl">
         <button class="btn-num" onclick="movePlayerNum(${p.id},-1)" ${i===0?'disabled':''}>▲</button>
         <button class="btn-num" onclick="movePlayerNum(${p.id},1)" ${i===players.length-1?'disabled':''}>▼</button>
-      </div>
+      </div>` : ''}
       <div class="player-jersey" style="background:${posColor(p.positions)}22;color:${posColor(p.positions)};border:1px solid ${posColor(p.positions)}44">${jersey}</div>
       <div class="player-info">
         <div class="player-name-row"><span class="player-name">${p.name}</span>${ovrText}</div>
         <div class="ovr-pos-list">${posOvrTags||'<span style="font-size:11px;color:var(--text3)">포지션 없음</span>'}</div>
       </div>
+      ${isAdmin ? `
       <button class="btn-icon" onclick="openEditModal(${p.id})"><i class="ti ti-edit"></i></button>
-      <button class="btn-icon danger" onclick="deletePlayer(${p.id})"><i class="ti ti-trash"></i></button>
+      <button class="btn-icon danger" onclick="deletePlayer(${p.id})"><i class="ti ti-trash"></i></button>` : ''}
     </div>`;
   }).join('');
 }
@@ -785,6 +853,7 @@ function openFieldPosGrid(pid) {
   _showPopupAt(anchorEl);
 }
 function handlePlayerTap(pid, anchorEl, fromBench) {
+  if (!isAdmin) return;
   if (fromBench) {
     if (!isFormationSelected()) { alertFormationRequired(); return; }
     // 필드 꽉 찼으면 → 교체 팝업 (포지션 팝업 X)
@@ -970,16 +1039,20 @@ function selectPosFromPopup(pos) {
     }
     if(slotIdx>=0) {
       const other=tokenAtSlot(slotIdx,pid);
+      // 현재 위치 먼저 저장 (덮어쓰기 전에)
+      const prevSlot=ft.slotIdx, prevX=ft.freeX, prevY=ft.freeY, prevPos=ft.pos;
+      // ft를 새 슬롯으로 이동
+      ft.slotIdx=slotIdx; ft.freeX=slots[slotIdx][0]; ft.freeY=slots[slotIdx][1]; ft.pos=pos;
       if(other) {
-        // 자리 바꿔치기 swap
-        other.slotIdx=ft.slotIdx;
-        other.freeX=slots[ft.slotIdx]?.[0] ?? ft.freeX;
-        other.freeY=slots[ft.slotIdx]?.[1] ?? ft.freeY;
-        if(ft.slotIdx>=0 && labels[ft.slotIdx]) other.pos=labels[ft.slotIdx];
+        // other를 ft가 있던 자리로 swap
+        other.slotIdx=prevSlot;
+        other.freeX=prevSlot>=0?(slots[prevSlot]?.[0]??prevX):prevX;
+        other.freeY=prevSlot>=0?(slots[prevSlot]?.[1]??prevY):prevY;
+        other.pos=prevSlot>=0&&labels[prevSlot]?labels[prevSlot]:prevPos;
       }
-      ft.slotIdx=slotIdx; ft.freeX=slots[slotIdx][0]; ft.freeY=slots[slotIdx][1];
+    } else {
+      ft.pos=pos; // 맞는 슬롯 자체가 없는 포메이션일 때 pos만 변경
     }
-    ft.pos=pos;
   } else {
     const slotIdx=findBestSlot(pos, slots, labels, null);
     if(slotIdx<0){alert(`${pos} 에 배치할 수 있는 빈 자리가 없습니다.`);closePosPopup();return;}
@@ -1440,6 +1513,7 @@ const LONG_PRESS=200, MOVE_THRESH=6;
 function onTokenMouseDown(e){e.preventDefault();startDrag(parseInt(this.dataset.pid),false,e.clientX,e.clientY,this);}
 function onTokenTouchStart(e){e.preventDefault();startDrag(parseInt(this.dataset.pid),false,e.touches[0].clientX,e.touches[0].clientY,this);}
 function startDrag(pid,fromBench,ex,ey,el){
+  if(!isAdmin) return;
   if(drag.longPressTimer){clearTimeout(drag.longPressTimer);drag.longPressTimer=null;}
   if(drag.el)drag.el.classList.remove('dragging','snapping');
   const origToken = fieldTokens.find(t => t.pid === pid);
@@ -1835,10 +1909,10 @@ function renderRecords(){
       <div class="match-meta">${m.date} · ${res}${haBadge}<span class="match-formation-badge">${m.formation}</span>${momBadge}</div>
       ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">출전</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
       ${scorerRows?`<div class="match-scorers">${scorerRows}</div>`:''}
-      <div class="match-card-btns">
+      ${isAdmin ? `<div class="match-card-btns">
         <button class="btn-match-edit" onclick="openMatchModal(${m.id})"><i class="ti ti-edit"></i> 수정</button>
         <button class="btn-match-del" onclick="deleteMatch(${m.id})"><i class="ti ti-trash"></i></button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -2011,6 +2085,7 @@ function switchTab(tab){
 
 // ── 초기화 ──
 document.getElementById('matchModal').addEventListener('click',function(e){if(e.target===this)closeMatchModal();});
+document.getElementById('adminModal')?.addEventListener('click',function(e){if(e.target===this)closeAdminModal();});
 document.getElementById('statHistoryModal')?.addEventListener('click',function(e){if(e.target===this)closeStatHistory();});
 document.getElementById('photoUrlModal')?.addEventListener('click',function(e){if(e.target===this)closePhotoUrlModal();});
 bootstrapApp();

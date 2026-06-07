@@ -7,6 +7,7 @@ let matchEvents = {}, matchMom = null, editingMatchId = null;
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
 let matchParticipants = [];
 let statsSubTab = 'personal';
+let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
 
 // 팝업 모드: 'pos' | 'sub'
 let popupMode = 'pos', popupTargetPid = null;
@@ -131,6 +132,9 @@ async function bootstrapApp() {
   renderFormationSaves();
   populateStatsYearFilter();
   document.getElementById('formationSelect').addEventListener('change', () => {
+    slotHighlight = -1;
+    drawFieldCanvas(-1);
+    renderField();
     persistField().catch(handleSaveError);
   });
 }
@@ -580,11 +584,61 @@ function findBestSlot(pos, slots, labels, excludePid) {
 }
 
 // ── 필드 캔버스 ──
+const FIELD_PAD = 16;
 function getCanvasRect() { return document.getElementById('fieldCanvas').getBoundingClientRect(); }
-function drawFieldCanvas() {
+function scaleFieldPad(w, h) {
+  const rw = fieldSize.w || w, rh = fieldSize.h || h;
+  return { px: FIELD_PAD * (w / rw), py: FIELD_PAD * (h / rh) };
+}
+function pointerToNorm(clientX, clientY) {
+  const cr = getCanvasRect();
+  const { px, py } = scaleFieldPad(cr.width, cr.height);
+  const nx = (clientX - cr.left - px) / (cr.width - 2 * px);
+  const ny = (clientY - cr.top - py) / (cr.height - 2 * py);
+  return {
+    x: Math.max(0.02, Math.min(0.98, nx)),
+    y: Math.max(0.02, Math.min(0.98, ny)),
+  };
+}
+/** 포메이션 고정 좌표(0~1) → 캔버스 픽셀. 슬롯·선수 배치 공통 변환 */
+function normToCanvasPx(nx, ny, W, H) {
+  const pad = FIELD_PAD;
+  return { x: pad + nx * (W - 2 * pad), y: pad + ny * (H - 2 * pad) };
+}
+/** 포메이션 슬롯을 필드 캔버스에 직접 그림 — 선수와 무관한 고정 자리 */
+function drawFormationSlots(ctx, W, H, nearSlot) {
+  if (!document.getElementById('tab-formation')?.classList.contains('active')) return;
+  const slots = getSlots(), labels = getLabels();
+  const occupied = new Set(fieldTokens.map(t => t.slotIdx).filter(i => i >= 0));
+  const sc = W / 420;
+  const rBase = Math.max(10, 14 * sc);
+  const rNear = Math.max(14, 20 * sc);
+  slots.forEach((sl, i) => {
+    const { x, y } = normToCanvasPx(sl[0], sl[1], W, H);
+    const isNear = i === nearSlot;
+    const isOccupied = occupied.has(i);
+    const r = isNear ? rNear : rBase;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = isNear ? 'rgba(255,255,255,0.38)' : isOccupied ? 'rgba(0,0,0,0.10)' : 'rgba(0,0,0,0.24)';
+    ctx.fill();
+    ctx.strokeStyle = isNear ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.32)';
+    ctx.lineWidth = isNear ? 2 : 1;
+    ctx.stroke();
+    if (labels[i]) {
+      ctx.fillStyle = isNear ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.52)';
+      ctx.font = `bold ${isNear ? Math.max(9, Math.round(11 * sc)) : Math.max(8, Math.round(9 * sc))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labels[i], x, y);
+    }
+  });
+}
+function drawFieldCanvas(highlightSlot) {
+  if (highlightSlot !== undefined) slotHighlight = highlightSlot;
   const canvas=document.getElementById('fieldCanvas');
   const wrap=document.getElementById('fieldWrap');
-  const RATIO=1.45; // 세로/가로 — 세로로 긴 축구장 비율
+  const RATIO=1.45;
   const maxW=(wrap.clientWidth||window.innerWidth)-24;
   const maxH=wrap.clientHeight-8;
   let W=maxW;
@@ -593,10 +647,23 @@ function drawFieldCanvas() {
   W=Math.max(200,W); H=Math.round(W*RATIO);
   canvas.width=W; canvas.height=H;
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
-  const ov=document.getElementById('snapOverlay');
-  ov.width=W; ov.height=H; ov.style.width=W+'px'; ov.style.height=H+'px';
   fieldSize={w:W,h:H};
   drawGrass(canvas);
+  drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);
+}
+function refreshFieldSlots(highlightSlot) {
+  drawFieldCanvas(highlightSlot);
+  repositionFieldTokens();
+}
+function repositionFieldTokens() {
+  fieldTokens.forEach(t => {
+    const el = document.querySelector(`.player-token[data-pid="${t.pid}"]`);
+    if (!el) return;
+    const { x, y } = tokenXY(t);
+    const { left, top } = tokenPos(x, y);
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  });
 }
 function drawGrass(canvas) {
   const W=canvas.width, H=canvas.height;
@@ -620,32 +687,6 @@ function drawGrass(canvas) {
     ctx.beginPath();ctx.arc(cx,cy,cr,a,a+Math.PI/2);ctx.stroke();
   });
 }
-function drawSnapOverlay(activePid, nx, ny) {
-  const ov=document.getElementById('snapOverlay');
-  const slots=getSlots(), labels=getLabels();
-  const ctx=ov.getContext('2d');
-  ctx.clearRect(0,0,ov.width,ov.height);
-  const nearSlot=findNearestSlot(activePid,nx,ny);
-  const sc=ov.width/420;
-  const rNear=Math.max(10,18*sc), rFar=Math.max(7,12*sc);
-  const fontNear=Math.max(8,Math.round(11*sc)), fontFar=Math.max(7,Math.round(9*sc));
-  slots.forEach((sl,i)=>{
-    const sx=sl[0]*ov.width, sy=sl[1]*ov.height, isNear=(nearSlot===i);
-    const r=isNear?rNear:rFar;
-    ctx.beginPath();ctx.arc(sx,sy,r,0,Math.PI*2);
-    ctx.fillStyle=isNear?'rgba(255,255,255,0.35)':'rgba(0,0,0,0.25)';ctx.fill();
-    ctx.strokeStyle=isNear?'rgba(255,255,255,0.8)':'rgba(255,255,255,0.3)';
-    ctx.lineWidth=isNear?Math.max(1.5,2*sc):Math.max(1,1*sc);ctx.stroke();
-    if(labels[i]){
-      ctx.fillStyle=isNear?'rgba(255,255,255,0.95)':'rgba(255,255,255,0.5)';
-      ctx.font=`${isNear?fontNear:fontFar}px sans-serif`;
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(labels[i],sx,sy);
-    }
-  });
-}
-function clearSnapOverlay(){const ov=document.getElementById('snapOverlay');ov.getContext('2d').clearRect(0,0,ov.width,ov.height);}
-
 function canvasRoundRect(ctx, x, y, w, h, r) {
   const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -777,7 +818,8 @@ async function exportFormationImage() {
     const p = players.find(x => x.id === t.pid);
     if (!p) return;
     const { x, y } = tokenXY(t);
-    drawExportToken(ctx, p, t, pad + x * fieldW, fieldY + y * fieldH, sc);
+    const { x: px, y: py } = normToCanvasPx(x, y, fieldW, fieldH);
+    drawExportToken(ctx, p, t, pad + px, fieldY + py, sc);
   });
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -818,14 +860,18 @@ function findNearestSlot(excludePid,nx,ny){
   slots.forEach((sl,i)=>{const d=Math.hypot(sl[0]-nx,sl[1]-ny);if(d<bd){bd=d;best=i;}});
   return best;
 }
-function tokenPos(nx,ny){
-  const cr=getCanvasRect();
-  const inner=document.getElementById('fieldInner').getBoundingClientRect();
-  return {left:cr.left-inner.left+nx*cr.width, top:cr.top-inner.top+ny*cr.height};
+function tokenPos(nx, ny) {
+  const cr = getCanvasRect();
+  const inner = document.getElementById('fieldInner').getBoundingClientRect();
+  const { x, y } = normToCanvasPx(nx, ny, cr.width, cr.height);
+  return { left: cr.left - inner.left + x, top: cr.top - inner.top + y };
 }
 
 // ── 필드 렌더 ──
 function renderField() {
+  if (document.getElementById('tab-formation')?.classList.contains('active')) {
+    drawFieldCanvas(slotHighlight);
+  }
   const td=document.getElementById('tokens');
   td.innerHTML='';
   document.getElementById('slotInfo').textContent=fieldTokens.length+'/'+MAX_FIELD;
@@ -874,9 +920,8 @@ function startDrag(pid,fromBench,ex,ey,el){
   drag={active:false,pid,fromBench,startX:ex,startY:ey,moved:false,longPressTimer:null,el};
   drag.longPressTimer=setTimeout(()=>{
     drag.active=true;drag.el.classList.add('dragging');
-    document.getElementById('snapOverlay').classList.add('active');
-    const {x,y}=tokenXY(fieldTokens.find(t=>t.pid===pid)||{slotIdx:-1,freeX:0.5,freeY:0.5});
-    drawSnapOverlay(pid,x,y);
+    const { x, y } = tokenXY(fieldTokens.find(t => t.pid === pid) || { slotIdx: -1, freeX: 0.5, freeY: 0.5 });
+    refreshFieldSlots(findNearestSlot(pid, x, y));
   },LONG_PRESS);
 }
 document.addEventListener('mousemove',onGlobalMove);
@@ -892,7 +937,6 @@ function onGlobalMove(e){
     drag.moved=true;
     clearTimeout(drag.longPressTimer);drag.longPressTimer=null;
     drag.active=true;
-    document.getElementById('snapOverlay').classList.add('active');
     if(drag.fromBench&&!fieldTokens.find(t=>t.pid===drag.pid)){
       if(fieldTokens.length>=MAX_FIELD){
         drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
@@ -921,9 +965,7 @@ function onGlobalMove(e){
     }
     if(drag.el)drag.el.classList.add('dragging');
   }
-  const cr=getCanvasRect();
-  const nx=Math.max(0.04,Math.min(0.96,(ex-cr.left)/cr.width));
-  const ny=Math.max(0.04,Math.min(0.96,(ey-cr.top)/cr.height));
+  const { x: nx, y: ny } = pointerToNorm(ex, ey);
   const ft=fieldTokens.find(t=>t.pid===drag.pid);
   if(ft){ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny;}
   if(drag.el){
@@ -931,7 +973,7 @@ function onGlobalMove(e){
     drag.el.style.left=left+'px';drag.el.style.top=top+'px';
     drag.el.classList.toggle('snapping',findNearestSlot(drag.pid,nx,ny)>=0);
   }
-  drawSnapOverlay(drag.pid,nx,ny);
+  refreshFieldSlots(findNearestSlot(drag.pid, nx, ny));
 }
 
 function onGlobalUp(e){
@@ -941,10 +983,9 @@ function onGlobalUp(e){
   const pid=drag.pid,wasActive=drag.active,wasMoved=drag.moved,wasFromBench=drag.fromBench,el=drag.el;
   drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
   if(el)el.classList.remove('dragging','snapping');
-  document.getElementById('snapOverlay').classList.remove('active');
-  clearSnapOverlay();
+  slotHighlight = -1;
 
-  if(!wasActive&&!wasMoved){openPosPopup(pid,el,wasFromBench);return;}
+  if(!wasActive&&!wasMoved){openPosPopup(pid,el,wasFromBench);refreshFieldSlots(-1);return;}
 
   if(wasActive){
     // 벤치로 드래그
@@ -953,9 +994,7 @@ function onGlobalUp(e){
       fieldTokens=fieldTokens.filter(t=>t.pid!==pid);
       saveFieldState();renderField();return;
     }
-    const cr=getCanvasRect();
-    const nx=Math.max(0.04,Math.min(0.96,(ex-cr.left)/cr.width));
-    const ny=Math.max(0.04,Math.min(0.96,(ey-cr.top)/cr.height));
+    const { x: nx, y: ny } = pointerToNorm(ex, ey);
     const ft=fieldTokens.find(t=>t.pid===pid);
     if(!ft){saveFieldState();renderField();return;}
 
@@ -986,6 +1025,8 @@ function onGlobalUp(e){
       ft.slotIdx=-1;ft.freeX=nx;ft.freeY=ny;
     }
     saveFieldState();renderField();
+  } else {
+    refreshFieldSlots(-1);
   }
 }
 
@@ -1419,7 +1460,7 @@ function switchTab(tab){
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
   });
   if(tab==='home')renderHome();
-  if(tab==='formation'){drawFieldCanvas();renderField();renderFormationSaves();}
+  if(tab==='formation'){slotHighlight=-1;drawFieldCanvas(-1);renderField();renderFormationSaves();}
   if(tab==='records')renderRecords();
   if(tab==='stats'){switchStatsSub(statsSubTab);}
 }
@@ -1431,10 +1472,11 @@ document.getElementById('photoUrlModal')?.addEventListener('click',function(e){i
 bootstrapApp();
 function onFieldResize(){
   if(!document.getElementById('tab-formation').classList.contains('active'))return;
-  drawFieldCanvas();renderField();
   if(drag.active&&drag.pid!=null){
     const ft=fieldTokens.find(t=>t.pid===drag.pid);
-    if(ft){const {x,y}=tokenXY(ft);drawSnapOverlay(drag.pid,x,y);}
+    if(ft){const {x,y}=tokenXY(ft);refreshFieldSlots(findNearestSlot(drag.pid,x,y));}
+  } else {
+    drawFieldCanvas(-1);renderField();
   }
 }
 window.addEventListener('resize',onFieldResize);

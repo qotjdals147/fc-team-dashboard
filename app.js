@@ -15,6 +15,18 @@ let popupMode = 'pos', popupTargetPid = null;
 function getFormation() { return document.getElementById('formationSelect').value; }
 function getSlots()     { return FORMATIONS[getFormation()] || []; }
 function getLabels()    { return FORMATION_POS_LABELS[getFormation()] || []; }
+function isFormationSelected() {
+  const f = getFormation();
+  return !!(f && FORMATIONS[f]);
+}
+function setFormationSelect(value) {
+  const sel = document.getElementById('formationSelect');
+  if (!sel) return;
+  sel.value = value && FORMATIONS[value] ? value : '';
+}
+function alertFormationRequired() {
+  alert('포메이션을 선택해주세요.');
+}
 
 function tokenXY(t) {
   // freeX/freeY = 실제 화면 위치 (슬롯 근처 미세 조정 가능)
@@ -83,6 +95,7 @@ function countFieldByPos(pos, excludePid) {
 }
 function checkSlotCapacity(pos, excludePid) {
   // return null = OK, string = 오류 메시지
+  if (!isFormationSelected()) return '포메이션을 선택해주세요.';
   const cap = countSlotsByPos(pos);
   if (cap === 0) return `현재 포메이션에 ${pos} 자리가 없습니다.`;
   const cur = countFieldByPos(pos, excludePid);
@@ -116,9 +129,8 @@ function applyRemoteData(data) {
   myTeamName = data.meta?.myTeam || '';
   teamPhotoUrl = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
-  const field = data.field || { formation: '4-3-3', tokens: [] };
-  const sel = document.getElementById('formationSelect');
-  if (sel) sel.value = field.formation || '4-3-3';
+  const field = data.field || { formation: '', tokens: [] };
+  setFormationSelect(field.formation);
   fieldTokens = normalizeFieldTokens(field.tokens);
 }
 async function maybeMigrateLocal(data) {
@@ -570,6 +582,7 @@ function selectPosFromPopup(pos) {
     }
     ft.pos=pos;
   } else {
+    if (!isFormationSelected()) { alertFormationRequired(); closePosPopup(); return; }
     if(fieldTokens.length>=MAX_FIELD){alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);closePosPopup();return;}
     const slotIdx=findBestSlot(pos, slots, labels, null);
     if(slotIdx<0){alert(`${pos} 에 배치할 수 있는 빈 자리가 없습니다.`);closePosPopup();return;}
@@ -836,6 +849,7 @@ function downloadPngBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 async function exportFormationImage() {
+  if (!isFormationSelected()) { alertFormationRequired(); return; }
   if (!fieldTokens.length) { alert('배치된 선수가 없습니다'); return; }
   const sc = 2;
   const fieldW = 420 * sc;
@@ -980,6 +994,10 @@ function onGlobalMove(e){
     clearTimeout(drag.longPressTimer);drag.longPressTimer=null;
     drag.active=true;
     if(drag.fromBench&&!fieldTokens.find(t=>t.pid===drag.pid)){
+      if (!isFormationSelected()) {
+        drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
+        alertFormationRequired(); return;
+      }
       if(fieldTokens.length>=MAX_FIELD){
         drag={active:false,pid:null,fromBench:false,startX:0,startY:0,moved:false,longPressTimer:null,el:null};
         alert(`최대 ${MAX_FIELD}명까지만 출전 가능합니다.`);return;
@@ -1114,6 +1132,7 @@ function pickBestPlayerForSlot(slotLabel, used) {
 }
 
 function applyFormation(){
+  if (!isFormationSelected()) { alertFormationRequired(); return; }
   const f=getFormation(), slots=FORMATIONS[f]; if(!slots)return;
   const labels=FORMATION_POS_LABELS[f]||[];
   const used=new Set();
@@ -1152,7 +1171,7 @@ document.getElementById('fsaveModal')?.addEventListener('click',function(e){if(e
 function loadSave(id){
   const s=formationSaves.find(x=>x.id===id); if(!s)return;
   fieldTokens=normalizeFieldTokens(s.tokens);
-  document.getElementById('formationSelect').value=s.formation||'4-3-3';
+  setFormationSelect(s.formation);
   drawFieldCanvas();renderField();renderFormationSaves();
   persistField().catch(handleSaveError);
 }

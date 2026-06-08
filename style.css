@@ -654,3 +654,17 @@ body.presentation-mode #presentPanel .pp-btn { width:calc(24px * var(--ps-panel,
 .player-value-badge {
   font-size:11px; color:#f59e0b; font-weight:700; margin-top:2px;
 }
+
+/* ─── 용병 뱃지 ─── */
+.mercenary-badge {
+  display:inline-block; padding:1px 6px; border-radius:10px;
+  background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b44;
+  font-size:10px; font-weight:700; margin-left:4px; vertical-align:middle;
+  white-space:nowrap;
+}
+.mercenary-label {
+  display:flex; align-items:center; gap:8px; cursor:pointer;
+  font-size:13px; color:var(--text2);
+  padding:4px 0;
+}
+.mercenary-label input[type="checkbox"] { width:16px; height:16px; accent-color:#f59e0b; }

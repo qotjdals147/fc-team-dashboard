@@ -243,6 +243,9 @@ function computeMatchWages(match) {
   ];
   allPids.forEach(({pid, pos, type}) => {
     if (!pid) return;
+    // 용병은 수당 지급 제외
+    const _plyr = players.find(p => p.id == pid);
+    if (_plyr?.isMercenary) return;
     const items = [];
     items.push({ label:'&#xCD9C;&#xC11D;', amount: wageRates.attendance });
     if (win) items.push({ label:'&#xC2B9;&#xB9AC;', amount: wageRates.win });
@@ -260,6 +263,7 @@ function computeMatchWages(match) {
 
 // 선수의 전체 누적 선수 가치
 function computePlayerTotalWage(pid) {
+  if (players.find(p => p.id === pid)?.isMercenary) return 0;
   return matches.reduce((sum, m) => {
     const w = computeMatchWages(m);
     return sum + (w[pid]?.total || 0);
@@ -1121,8 +1125,9 @@ function renderRoster() {
       return `<span class="ovr-pos-item">${pos}${ov!=null?' '+ov:''}</span>`;
     }).join('');
     const jersey = p.jersey != null ? p.jersey : '—';
-    const wage = computePlayerTotalWage(p.id);
-    const valueStr = formatPlayerValue(wage);
+    const wage = p.isMercenary ? 0 : computePlayerTotalWage(p.id);
+    const valueStr = (!p.isMercenary && wage > 0) ? formatPlayerValue(wage) : null;
+    const mercenaryBadge = p.isMercenary ? '<span class="mercenary-badge">용병</span>' : '';
     return `<div class="player-card">
       ${isAdmin ? `<div class="num-ctrl">
         <button class="btn-num" onclick="movePlayerNum(${p.id},-1)" ${i===0?'disabled':''}>▲</button>
@@ -1130,7 +1135,7 @@ function renderRoster() {
       </div>` : ''}
       <div class="player-jersey" style="background:${posColor(p.positions)}22;color:${posColor(p.positions)};border:1px solid ${posColor(p.positions)}44">${jersey}</div>
       <div class="player-info">
-        <div class="player-name-row"><span class="player-name">${p.name}</span>${ovrText}</div>
+        <div class="player-name-row"><span class="player-name">${p.name}</span>${mercenaryBadge}${ovrText}</div>
         <div class="ovr-pos-list">${posOvrTags||'<span style="font-size:11px;color:var(--text3)">포지션 없음</span>'}</div>
         ${valueStr ? `<div class="player-value-badge">&#x1F4B0; ${valueStr}</div>` : ''}
       </div>
@@ -1200,6 +1205,7 @@ function openAddModal() {
   buildPosCheckboxes();
   document.getElementById('ovrSection').style.display='none';
   document.getElementById('ovrInputs').innerHTML='';
+  document.getElementById('inputMercenary').checked=false;
   document.getElementById('playerModal').classList.add('open');
   setTimeout(()=>document.getElementById('inputName').focus(),100);
 }
@@ -1219,6 +1225,7 @@ function openEditModal(id) {
     const v=(p.ovr&&p.ovr[pos]!=null)?p.ovr[pos]:50;
     return ovrRowHtml(pos, v);
   }).join('');
+  document.getElementById('inputMercenary').checked=!!(p.isMercenary);
   document.getElementById('playerModal').classList.add('open');
 }
 function closeModal() { document.getElementById('playerModal').classList.remove('open'); }
@@ -1230,11 +1237,12 @@ function savePlayer() {
   const ovr={};
   document.getElementById('ovrInputs').querySelectorAll('.ovr-number-input').forEach(r=>{ovr[r.dataset.pos]=parseInt(r.value)||50;});
   const formBonus=parseInt(document.getElementById('inputFormBonus').value)||0;
+  const isMercenary=!!(document.getElementById('inputMercenary')?.checked);
   if(editingId){
     const idx=players.findIndex(x=>x.id===editingId);
-    if(idx>=0) players[idx]=normalizePlayerOvr({...players[idx],name,jersey,positions,ovr,formBonus});
+    if(idx>=0) players[idx]=normalizePlayerOvr({...players[idx],name,jersey,positions,ovr,formBonus,isMercenary});
   } else {
-    players.push(normalizePlayerOvr({id:nextId(),name,jersey,positions,ovr,formBonus}));
+    players.push(normalizePlayerOvr({id:nextId(),name,jersey,positions,ovr,formBonus,isMercenary}));
   }
   savePlayers(); closeModal(); renderRoster(); renderField(); refreshHomeIfVisible();
 }

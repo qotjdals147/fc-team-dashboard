@@ -320,6 +320,17 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .match-meta { font-size:11px; color:var(--text2); text-align:center; margin-bottom:8px; }
 .match-formation-badge { display:inline-block; background:var(--bg2); border-radius:6px; padding:1px 7px; font-size:11px; color:var(--text2); margin-left:4px; }
 .match-mom { display:inline-block; background:#fff7e0; color:#b8860b; border-radius:6px; padding:1px 7px; font-size:11px; margin-left:4px; font-weight:600; }
+.btn-wage-toggle { display:block; width:100%; margin-top:8px; padding:5px 8px; border:1px dashed var(--border2); border-radius:8px; background:transparent; color:var(--text2); font-size:11px; cursor:pointer; text-align:left; transition:background .15s; }
+.btn-wage-toggle:hover { background:var(--bg2); }
+.match-wages { margin-top:6px; background:var(--bg2); border-radius:8px; padding:6px 10px; }
+.wage-row { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:11px; border-bottom:1px solid var(--border); }
+.wage-row:last-child { border-bottom:none; }
+.wage-name { min-width:50px; font-weight:600; color:var(--text); }
+.wage-tags { display:flex; flex-wrap:wrap; gap:3px; flex:1; }
+.wage-tag { background:var(--bg3); color:var(--text2); border-radius:4px; padding:1px 5px; font-size:10px; }
+.wage-total { font-weight:700; color:#16a34a; font-size:11px; white-space:nowrap; }
+.stat-wage { font-weight:700; color:#16a34a; }
+.mom-select-label { font-size:11px; font-weight:600; color:var(--text2); margin-bottom:4px; }
 .match-scorers { border-top:1px solid var(--border); padding-top:8px; }
 .match-scorer-row { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:12px; }
 .match-scorer-icon { font-size:13px; width:16px; text-align:center; flex-shrink:0; }

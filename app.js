@@ -204,7 +204,51 @@ function submitAdminPw() {
 // slotIdx >= 0 → 어느 포메이션 슬롯(역할)인지 / freeX·freeY → 실제 화면 좌표(미세 조정)
 // subPid: 교체 예정 선수 pid (optional)
 let players = [], editingId = null, fieldSize = {w:0,h:0};
-let matchEvents = {}, matchMom = null, editingMatchId = null;
+let matchEvents = {}, matchMom = null, matchBestDef = null, matchBestDef2 = null, editingMatchId = null;
+
+// ── 수당 기준 (meta.wageRates로 오버라이드 가능) ──
+const WAGE_DEFAULTS = { attendance:50, win:100, cleansheet:150, goal:300, assist:200, bestDef:500, bestDef2:300, mom:800 };
+let wageRates = { ...WAGE_DEFAULTS };
+const DEF_POSITIONS = new Set(['CB','LB','RB','GK']);
+
+function loadWageRates(meta) {
+  if (!meta?.wageRates) return;
+  try { wageRates = { ...WAGE_DEFAULTS, ...(typeof meta.wageRates === 'string' ? JSON.parse(meta.wageRates) : meta.wageRates) }; } catch(e) {}
+}
+
+// 한 경기에서 각 선수가 받는 수당 계산 → {pid: {items:[{label,amount}], total}}
+function computeMatchWages(match) {
+  const result = {};
+  const win = match.scoreUs > match.scoreOpp;
+  const clean = match.scoreOpp === 0;
+  const allPids = [
+    ...(match.lineup || []).map(x => ({pid:x.pid, pos:x.pos, type:'field'})),
+    ...(match.subs   || []).map(x => ({pid:x.pid, pos:x.pos, type:'sub'})),
+  ];
+  allPids.forEach(({pid, pos, type}) => {
+    if (!pid) return;
+    const items = [];
+    items.push({ label:'&#xCD9C;&#xC11D;', amount: wageRates.attendance });
+    if (win) items.push({ label:'&#xC2B9;&#xB9AC;', amount: wageRates.win });
+    if (clean && DEF_POSITIONS.has(pos)) items.push({ label:'&#xD074;&#xB9B0;&#xC2DC;&#xD2B8;', amount: wageRates.cleansheet });
+    const scorer = (match.scorers || []).find(s => s.pid == pid);
+    if (scorer?.goals)   items.push({ label:`&#xACF8;&#xD0A8;${scorer.goals>1?'&times;'+scorer.goals:''}`, amount: wageRates.goal * scorer.goals });
+    if (scorer?.assists) items.push({ label:`&#xC5B4;&#xC2DC;${scorer.assists>1?'&times;'+scorer.assists:''}`, amount: wageRates.assist * scorer.assists });
+    if (match.bestDef  == pid) items.push({ label:'&#xBCA0;&#xC2A4;&#xD2B8;&#xC218;&#xBE44;', amount: wageRates.bestDef });
+    if (match.bestDef2 == pid) items.push({ label:'&#xC218;&#xBE44;&#xACF5;&#xD5CC;&#xC218;&#xB2F9;', amount: wageRates.bestDef2 });
+    if (match.mom      == pid) items.push({ label:'MOM', amount: wageRates.mom });
+    result[pid] = { items, total: items.reduce((s,i)=>s+i.amount, 0) };
+  });
+  return result;
+}
+
+// 선수의 전체 누적 선수 가치
+function computePlayerTotalWage(pid) {
+  return matches.reduce((sum, m) => {
+    const w = computeMatchWages(m);
+    return sum + (w[pid]?.total || 0);
+  }, 0);
+}
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
 let cachedFormation = '';
 let photoTransform = { x: 0, y: 0, scale: 1 };
@@ -567,6 +611,7 @@ function applyRemoteData(data) {
   }
   currentPhotoIdx = 0;
   photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
+  loadWageRates(data.meta);
   // 프레젠테이션 스케일
   const rawPS = data.meta?.presentScales;
   if (rawPS) {
@@ -2499,8 +2544,20 @@ function renderMatchModalEvents(em) {
       </div>
     </div>`;
   }).join('');
-  document.getElementById('momSelectWrap').innerHTML=`<div class="mom-select" id="momBtns">
+  document.getElementById('momSelectWrap').innerHTML=`
+  <div class="mom-select-label">&#x1F3C6; MOM</div>
+  <div class="mom-select" id="momBtns">
     ${matchParticipants.map(x=>`<button class="mom-btn ${matchMom===x.pid?'active':''}" onclick="selectMom(${x.pid})" id="mom_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
+  </div>
+  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xBCA0;&#xC2A4;&#xD2B8; &#xC218;&#xBE44; (500&#xC6D0;)</div>
+  <div class="mom-select" id="bestDefBtns">
+    <button class="mom-btn ${matchBestDef===null?'active':''}" onclick="selectBestDef(null)" id="bd_none">&#xC5C6;&#xC74C;</button>
+    ${matchParticipants.map(x=>`<button class="mom-btn ${matchBestDef===x.pid?'active':''}" onclick="selectBestDef(${x.pid})" id="bd_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
+  </div>
+  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xC218;&#xBE44; &#xACF5;&#xD5CC; &#xC218;&#xB2F9; (300&#xC6D0;)</div>
+  <div class="mom-select" id="bestDef2Btns">
+    <button class="mom-btn ${matchBestDef2===null?'active':''}" onclick="selectBestDef2(null)" id="bd2_none">&#xC5C6;&#xC74C;</button>
+    ${matchParticipants.map(x=>`<button class="mom-btn ${matchBestDef2===x.pid?'active':''}" onclick="selectBestDef2(${x.pid})" id="bd2_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
   </div>`;
   renderMatchLineupPreview();
 }
@@ -2510,7 +2567,7 @@ function syncMatchFromFormation(){
   renderMatchModalEvents(em);
 }
 function openMatchModal(editId){
-  matchEvents={};matchMom=null;editingMatchId=editId||null;
+  matchEvents={};matchMom=null;matchBestDef=null;matchBestDef2=null;editingMatchId=editId||null;
   const em=editId?matches.find(m=>m.id===editId):null;
   document.getElementById('matchMyTeam').value=em?.myTeam||myTeamName||'';
   document.getElementById('matchOppTeam').value=em?.oppTeam||'';
@@ -2518,6 +2575,8 @@ function openMatchModal(editId){
   document.getElementById('matchScoreUs').value=em?.scoreUs??0;
   document.getElementById('matchScoreOpp').value=em?.scoreOpp??0;
   matchMom=em?.mom||null;
+  matchBestDef=em?.bestDef||null;
+  matchBestDef2=em?.bestDef2||null;
   if(em) matchParticipants=buildParticipantsFromMatch(em);
   else matchParticipants=buildParticipantsFromField();
   renderMatchModalEvents(em);
@@ -2525,8 +2584,22 @@ function openMatchModal(editId){
 }
 function selectMom(pid){
   matchMom=(matchMom===pid)?null:pid;
-  document.querySelectorAll('.mom-btn').forEach(b=>b.classList.remove('active'));
-  if(matchMom){const b=document.getElementById('mom_'+matchMom);if(b)b.classList.add('active');}
+  document.querySelectorAll('#momBtns .mom-btn').forEach(b=>b.classList.remove('active'));
+  const active=document.getElementById(pid===null?'mom_none':'mom_'+matchMom);
+  if(active)active.classList.add('active');
+  if(!matchMom){const b=document.getElementById('mom_none');if(b)b.classList.add('active');}
+}
+function selectBestDef(pid){
+  matchBestDef=pid;
+  document.querySelectorAll('#bestDefBtns .mom-btn').forEach(b=>b.classList.remove('active'));
+  const id=pid===null?'bd_none':'bd_'+pid;
+  const b=document.getElementById(id);if(b)b.classList.add('active');
+}
+function selectBestDef2(pid){
+  matchBestDef2=pid;
+  document.querySelectorAll('#bestDef2Btns .mom-btn').forEach(b=>b.classList.remove('active'));
+  const id=pid===null?'bd2_none':'bd2_'+pid;
+  const b=document.getElementById(id);if(b)b.classList.add('active');
 }
 function changeEvent(pid,type,delta){
   if(!matchEvents[pid])matchEvents[pid]={goals:0,assists:0};
@@ -2559,7 +2632,8 @@ function saveMatch(){
   const matchData={
     id:editingMatchId||Date.now(),myTeam,oppTeam,date,homeAway,scoreUs,scoreOpp,
     formation:em?.formation||getFormation(),lineup,subs,scorers,
-    mom:matchMom||null,momName:momPlayer?.name||null
+    mom:matchMom||null,momName:momPlayer?.name||null,
+    bestDef:matchBestDef||null,bestDef2:matchBestDef2||null
   };
   if(editingMatchId){const idx=matches.findIndex(m=>m.id===editingMatchId);if(idx>=0)matches[idx]=matchData;else matches.unshift(matchData);}
   else matches.unshift(matchData);
@@ -2596,21 +2670,41 @@ function renderRecords(){
       return `<span class="match-lineup-tag sub">🔄${s.name}${qb}</span>`;
     }).join('');
     const momBadge=m.momName?`<span class="match-mom">🏅 MOM ${m.momName}</span>`:'';
+    const bdName=m.bestDef?players.find(p=>p.id==m.bestDef)?.name||'':null;
+    const bd2Name=m.bestDef2?players.find(p=>p.id==m.bestDef2)?.name||'':null;
+    const defBadges=(bdName?`<span class="match-mom">&#x1F6E1;&#xFE0F; &#xBCA0;&#xC218; ${bdName}</span>`:'')+(bd2Name?`<span class="match-mom">&#x1F6E1;&#xFE0F; &#xACF5;&#xD5CC; ${bd2Name}</span>`:'');
+    // 수당 요약
+    const wages=computeMatchWages(m);
+    const wageRows=Object.entries(wages).map(([pid,w])=>{
+      const p=players.find(pl=>pl.id==pid);if(!p||!w.total)return'';
+      const tags=w.items.map(i=>`<span class="wage-tag">${i.label} +${i.amount}</span>`).join('');
+      return `<div class="wage-row"><span class="wage-name">${p.name}</span><span class="wage-tags">${tags}</span><span class="wage-total">+${w.total}&#xC6D0;</span></div>`;
+    }).filter(Boolean).join('');
+    const wageTotal=Object.values(wages).reduce((s,w)=>s+w.total,0);
+    const wageSection=wageRows?`<div class="match-wages" id="wages_${m.id}" style="display:none">${wageRows}</div>
+      <button class="btn-wage-toggle" onclick="toggleWageSection(${m.id})">&#x1F4B0; &#xC218;&#xB2F9; &#xD655;&#xC778; (+${wageTotal}&#xC6D0;)</button>`:'';
     return `<div class="match-card ${cardCls}">
       <div class="match-score-row">
         <span class="match-team" style="text-align:right">${m.myTeam}</span>
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
         <span class="match-team">${m.oppTeam}</span>
       </div>
-      <div class="match-meta">${m.date} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}</div>
-      ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">출전</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
+      <div class="match-meta">${m.date} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}${defBadges}</div>
+      ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">&#xCD9C;&#xC804;</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
       ${scorerRows?`<div class="match-scorers">${scorerRows}</div>`:''}
+      ${wageSection}
       ${isAdmin ? `<div class="match-card-btns">
-        <button class="btn-match-edit" onclick="openMatchModal(${m.id})"><i class="ti ti-edit"></i> 수정</button>
+        <button class="btn-match-edit" onclick="openMatchModal(${m.id})"><i class="ti ti-edit"></i> &#xC218;&#xC815;</button>
         <button class="btn-match-del" onclick="deleteMatch(${m.id})"><i class="ti ti-trash"></i></button>
       </div>` : ''}
     </div>`;
   }).join('');
+}
+
+function toggleWageSection(mid) {
+  const el=document.getElementById('wages_'+mid);
+  if(!el)return;
+  el.style.display=el.style.display==='none'?'block':'none';
 }
 
 // ── 통계 ──
@@ -2643,7 +2737,11 @@ function renderPersonalStats(filtered) {
   const sortKey = document.getElementById('statsSortKey')?.value || 'total';
   const base = computePlayerStats(filtered, players)
     .filter(s => s.attendance > 0 || s.goals > 0 || s.assists > 0 || s.mom > 0)
-    .map(r => ({ ...r, total: (r.goals||0) + (r.assists||0) + (r.attendance||0) + (r.mom||0) }));
+    .map(r => ({
+      ...r,
+      total: (r.goals||0) + (r.assists||0) + (r.attendance||0) + (r.mom||0),
+      wage: computePlayerTotalWage(r.pid)
+    }));
   const rows = [...base].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
   if (!filtered.length) return '<div class="empty-state">경기 기록이 없습니다</div>';
   if (!rows.length) return '<div class="empty-state">출전·기록 데이터가 없습니다</div>';
@@ -2667,19 +2765,21 @@ function renderPersonalStats(filtered) {
   const tableRows = rows.map(r => {
     const gCls = r.goals > 0 ? 'stat-click' : 'stat-click zero';
     const aCls = r.assists > 0 ? 'stat-click' : 'stat-click zero';
+    const wageDisplay = r.wage > 0 ? `<span class="stat-wage">${r.wage.toLocaleString()}&#xC6D0;</span>` : '—';
     return `<tr>
       <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span></span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}</td>
       <td>${r.attendance}</td>
       <td><span class="${gCls}" onclick="openStatHistory(${r.pid},'goals')">${r.goals}</span></td>
       <td><span class="${aCls}" onclick="openStatHistory(${r.pid},'assists')">${r.assists}</span></td>
       <td>${r.mom || '—'}</td>
+      <td>${wageDisplay}</td>
     </tr>`;
   }).join('');
   return summary + `<table class="stats-table">
-    <thead><tr><th>선수</th><th>출석수</th><th>골</th><th>어시</th><th>MOM</th></tr></thead>
+    <thead><tr><th>&#xC120;&#xC218;</th><th>&#xCD9C;&#xC11D;</th><th>&#xACF8;</th><th>&#xC5B4;&#xC2DC;</th><th>MOM</th><th>&#x1F4B0; &#xC120;&#xC218; &#xAC00;&#xCE58;</th></tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <div style="font-size:10px;color:var(--text3)">골·어시 숫자를 누르면 경기별 히스토리 · 출석 = 선발+교체+교체후보</div>`;
+  <div style="font-size:10px;color:var(--text3)">&#xACF8;&#xB7C9;&#xC5B4;&#xC2DC; &#xC22B;&#xC790;&#xB97C; &#xB204;&#xB974;&#xBA74; &#xACBD;&#xAE30;&#xBCC4; &#xD788;&#xC2A4;&#xD1A0;&#xB9AC; &middot; &#xC120;&#xC218; &#xAC00;&#xCE58; = &#xC804;&#xCCB4; &#xACBD;&#xAE30; &#xB204;&#xC801; &#xC218;&#xB2F9; &#xD569;&#xC0B0;</div>`;
 }
 function renderTeamStats(filtered) {
   if (!filtered.length) {

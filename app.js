@@ -2311,9 +2311,11 @@ function saveFieldState(){ persistField().catch(handleSaveError); }
 // ── 오늘 멤버 필터 (세션 전용) ──
 function toggleAvailFilter() {
   if (sessionAvailablePids === null) {
-    // 필터 ON: 현재 쿼터 필드 전부 비우고, 빈 Set으로 시작
+    // 필터 ON: 1~4쿼터 전체 필드 비우고, 빈 Set으로 시작
     fieldTokens = [];
-    quarterData[activeQuarter] = { ...(quarterData[activeQuarter] || {}), formation: getFormation(), tokens: [] };
+    for (let q = 1; q <= 4; q++) {
+      quarterData[q] = { ...(quarterData[q] || {}), formation: quarterData[q]?.formation || '', tokens: [] };
+    }
     saveFieldState();
     drawFieldCanvas(slotHighlight);
     renderField();

@@ -287,9 +287,9 @@ body:not(.is-admin) .admin-only { display:none !important; }
 /* 포메이션 저장 패널 */
 .quarter-bar { display:flex; align-items:center; gap:6px; padding:5px 10px; background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0; }
 .quarter-bar-label { font-size:11px; color:var(--text2); font-weight:600; margin-right:2px; }
-.quarter-btn { padding:3px 11px; border-radius:20px; border:1px solid var(--border2); background:var(--bg); color:var(--text2); font-size:12px; font-weight:700; cursor:pointer; transition:all .15s; }
-.quarter-btn.active { background:var(--accent); color:#fff; border-color:transparent; }
-.quarter-btn.has-players { border-color:var(--accent); color:var(--accent); }
+.quarter-btn { padding:3px 11px; border-radius:20px; border:1px solid var(--border2); background:var(--bg); color:var(--text); font-size:12px; font-weight:700; cursor:pointer; transition:all .2s; }
+.quarter-btn.active { background:#2563eb; color:#fff; border-color:transparent; box-shadow:0 0 0 2px rgba(37,99,235,.3); }
+.quarter-btn.has-players { border-color:#2563eb; color:#2563eb; }
 .formation-saves-panel { padding:8px 12px 6px; border-top:1px solid var(--border); flex-shrink:0; max-height:140px; overflow-y:auto; }
 .formation-saves-panel h4 { font-size:11px; font-weight:600; color:var(--text2); margin-bottom:6px; }
 .fsave-list { display:flex; flex-direction:column; gap:5px; }
@@ -439,6 +439,10 @@ body.presentation-mode .present-bar {
 body.presentation-mode .formation-toolbar,
 body.presentation-mode .formation-saves-panel,
 body.presentation-mode .formation-view-label { display:none !important; }
+
+/* 프레젠테이션 중 오늘 멤버 버튼/패널은 숨김 (발표 전 설정 후 진입) */
+body.presentation-mode .avail-btn,
+body.presentation-mode #availPanel { display:none !important; }
 
 /* 필드 영역: 캔버스가 가운데 오도록 */
 body.presentation-mode .field-wrap {

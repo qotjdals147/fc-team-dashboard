@@ -1149,7 +1149,7 @@ function renderRoster() {
         <button class="btn-num" onclick="movePlayerNum(${p.id},-1)" ${i===0?'disabled':''}>▲</button>
         <button class="btn-num" onclick="movePlayerNum(${p.id},1)" ${i===players.length-1?'disabled':''}>▼</button>
       </div>` : ''}
-      <div class="player-jersey" style="background:${posColor(p.positions)}22;color:${posColor(p.positions)};border:1px solid ${posColor(p.positions)}44">${jersey}</div>
+      <div class="player-jersey" style="background:${primaryPosColor(p)}22;color:${primaryPosColor(p)};border:1px solid ${primaryPosColor(p)}44">${jersey}</div>
       <div class="player-info">
         <div class="player-name-row"><span class="player-name">${p.name}</span>${mercenaryBadge}${ovrText}</div>
         <div class="ovr-pos-list">${posOvrTags||'<span style="font-size:11px;color:var(--text3)">포지션 없음</span>'}</div>
@@ -2247,7 +2247,7 @@ function renderBench(){
     wrap.className='bench-item';
     const div=document.createElement('div');
     div.className='bench-player';div.dataset.pid=p.id;
-    div.innerHTML=`<div class="dot" style="background:${posColor(p.positions)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${eff!=null?`<span class="bench-player-ovr">${eff}</span>`:''}`;
+    div.innerHTML=`<div class="dot" style="background:${primaryPosColor(p)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${eff!=null?`<span class="bench-player-ovr">${eff}</span>`:''}`;
     div.addEventListener('mousedown',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.clientX,e.clientY,this);});
     div.addEventListener('touchstart',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.touches[0].clientX,e.touches[0].clientY,this);},{passive:false});
     wrap.appendChild(div);

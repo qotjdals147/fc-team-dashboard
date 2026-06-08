@@ -24,6 +24,17 @@ function posClass(p) {
 }
 function posColor(positions) { return POS_BG[positions&&positions[0]] || '#6b6b68'; }
 
+// OVR 가장 높은 포지션 (= 주포지션) 반환
+function primaryPos(p) {
+  if (!p || !p.positions || !p.positions.length) return '';
+  if (p.positions.length === 1) return p.positions[0];
+  return p.positions.reduce((best, pos) => {
+    return (getOvr(p, pos) ?? 0) >= (getOvr(p, best) ?? 0) ? pos : best;
+  }, p.positions[0]);
+}
+// 주포지션 기반 색상
+function primaryPosColor(p) { return posColor([primaryPos(p)]); }
+
 // ── 포메이션 슬롯 기본 좌표 (자동배치·슬롯 마커용) ──
 // x,y = 플레이 영역 0~1 (0=상단 공격, 1=하단 GK). 드래그 후 freeX/freeY로 미세 이동 가능.
 const FORMATIONS = {

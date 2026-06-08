@@ -11,7 +11,7 @@
 
 
 <head>
-<!-- 관리자/총무 전용 요소 즉시 숨김 (JS/CSS 로드 전 깜빡임 방지) -->
+<!-- ???/?? ?? ?? ?? ?? (JS/CSS ?? ? ??? ??) -->
 <style>body:not(.is-admin) .admin-only{display:none!important}body:not(.is-treasurer) .treasurer-only{display:none!important}</style>
 
 
@@ -24,11 +24,11 @@
 
 
 
-<title>FC 사이트</title>
+<title>FC ???</title>
 
 
 
-<link rel="stylesheet" href="style.css?v=58">
+<link rel="stylesheet" href="style.css?v=60">
 
 
 
@@ -60,7 +60,7 @@
 
 
 
-    <span id="syncText">데이터 동기화 중...</span>
+    <span id="syncText">??? ??? ?...</span>
 
 
 
@@ -68,7 +68,7 @@
 
 
 
-  <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">&#x1F512;</button>
+  <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="??? ??">&#x1F512;</button>
 
 
 
@@ -80,23 +80,23 @@
 
 
 
-  <button class="tab-btn active" onclick="switchTab('home')"><i class="ti ti-home"></i>홈</button>
+  <button class="tab-btn active" onclick="switchTab('home')"><i class="ti ti-home"></i>?</button>
 
 
 
-  <button class="tab-btn" onclick="switchTab('roster')"><i class="ti ti-users"></i>명단</button>
+  <button class="tab-btn" onclick="switchTab('roster')"><i class="ti ti-users"></i>??</button>
 
 
 
-  <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-layout-grid"></i>포메</button>
+  <button class="tab-btn" onclick="switchTab('formation')"><i class="ti ti-layout-grid"></i>??</button>
 
 
 
-  <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>경기</button>
+  <button class="tab-btn" onclick="switchTab('records')"><i class="ti ti-trophy"></i>??</button>
 
 
 
-  <button class="tab-btn" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
+  <button class="tab-btn admin-only" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>??</button>
 
 
 
@@ -116,7 +116,7 @@
 
 
 
-      <img id="homePhoto" class="home-photo" alt="팀 사진" style="display:none">
+      <img id="homePhoto" class="home-photo" alt="? ??" style="display:none">
 
 
 
@@ -128,7 +128,7 @@
 
 
 
-        <span>팀 사진을 등록하세요</span>
+        <span>? ??? ?????</span>
 
 
 
@@ -136,7 +136,7 @@
 
 
 
-      <button type="button" class="btn-photo-change admin-only" onclick="openPhotoUrlModal()"><i class="ti ti-link"></i> 사진 변경</button>
+      <button type="button" class="btn-photo-change admin-only" onclick="openPhotoUrlModal()"><i class="ti ti-link"></i> ?? ??</button>
 
 
 
@@ -148,11 +148,11 @@
 
 
 
-      <h2 class="home-team-name" id="homeTeamName">우리 FC</h2>
+      <h2 class="home-team-name" id="homeTeamName">?? FC</h2>
 
 
 
-      <button type="button" class="btn-team-edit admin-only" onclick="editTeamName()" title="팀 이름 수정"><i class="ti ti-pencil"></i></button>
+      <button type="button" class="btn-team-edit admin-only" onclick="editTeamName()" title="? ?? ??"><i class="ti ti-pencil"></i></button>
 
 
 
@@ -164,7 +164,7 @@
 
 
 
-      <div class="home-members-title">클럽원 <span id="homeMemberCount"></span></div>
+      <div class="home-members-title">??? <span id="homeMemberCount"></span></div>
 
 
 
@@ -192,7 +192,7 @@
 
 
 
-    <h2>선수 명단</h2>
+    <h2>?? ??</h2>
 
 
 
@@ -200,11 +200,11 @@
 
 
 
-      <button class="btn-sort" onclick="sortByPosition()"><i class="ti ti-arrows-sort"></i> 포지션순</button>
+      <button class="btn-sort" onclick="sortByPosition()"><i class="ti ti-arrows-sort"></i> ????</button>
 
 
 
-      <button class="btn-add admin-only" onclick="openAddModal()"><i class="ti ti-plus"></i> 추가</button>
+      <button class="btn-add admin-only" onclick="openAddModal()"><i class="ti ti-plus"></i> ??</button>
 
 
 
@@ -236,7 +236,7 @@
 
 
 
-    <button id="btnPresent" class="btn-present admin-only" onclick="togglePresentMode()" title="프레젠테이션 모드">&#x1F5A5;&#xFE0F; 발표</button>
+    <button id="btnPresent" class="btn-present admin-only" onclick="togglePresentMode()" title="?????? ??">&#x1F5A5;&#xFE0F; ??</button>
 
 
 
@@ -252,7 +252,7 @@
 
 
 
-    <label>포메이션</label>
+    <label>????</label>
 
 
 
@@ -260,7 +260,7 @@
 
 
 
-      <option value="">포메이션 선택</option>
+      <option value="">???? ??</option>
 
 
 
@@ -296,19 +296,19 @@
 
 
 
-    <button class="btn-apply" onclick="applyFormation()">자동 배치</button>
+    <button class="btn-apply" onclick="applyFormation()">?? ??</button>
 
 
 
-    <button class="btn-save-field" onclick="saveFormation()"><i class="ti ti-device-floppy"></i> 저장</button>
+    <button class="btn-save-field" onclick="saveFormation()"><i class="ti ti-device-floppy"></i> ??</button>
 
 
 
-    <button class="btn-export-field" onclick="exportFormationImage()"><i class="ti ti-photo"></i> 이미지</button>
+    <button class="btn-export-field" onclick="exportFormationImage()"><i class="ti ti-photo"></i> ???</button>
 
 
 
-    <button class="btn-reset-field" onclick="clearField()">초기화</button>
+    <button class="btn-reset-field" onclick="clearField()">???</button>
 
 
 
@@ -356,7 +356,7 @@
 
 
 
-    <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
+    <h4><i class="ti ti-bookmark"></i> ??? ????</h4>
 
 
 
@@ -403,7 +403,7 @@
 
 
 
-    <div class="bench-title admin-only">탭 &#x2192; 자동 배치 &#xB7; 드래그 &#x2192; 원하는 자리 &#xB7; &#x1F504; &#x2192; 출전 교체</div>
+    <div class="bench-title admin-only">? &#x2192; ?? ?? &#xB7; ??? &#x2192; ??? ?? &#xB7; &#x1F504; &#x2192; ?? ??</div>
 
 
 
@@ -575,7 +575,7 @@
 
 
 
-    <button class="pp-exit-btn" onclick="togglePresentMode()">❌ 발표 종료</button>
+    <button class="pp-exit-btn" onclick="togglePresentMode()">? ?? ??</button>
 
 
 
@@ -595,7 +595,7 @@
 
 
 
-    <div class="pp-block-title">화면 크기 조절</div>
+    <div class="pp-block-title">?? ?? ??</div>
 
 
 
@@ -603,7 +603,7 @@
 
 
 
-      <span class="pp-label">벤치 글씨</span>
+      <span class="pp-label">?? ??</span>
 
 
 
@@ -627,7 +627,7 @@
 
 
 
-      <span class="pp-label">멤버 글씨</span>
+      <span class="pp-label">?? ??</span>
 
 
 
@@ -651,7 +651,7 @@
 
 
 
-      <span class="pp-label">패널 크기</span>
+      <span class="pp-label">?? ??</span>
 
 
 
@@ -683,11 +683,11 @@
 
 
 
-      <span>&#x1F465; 오늘 참전 멤버</span>
+      <span>&#x1F465; ?? ?? ??</span>
 
 
 
-      <button class="pp-avail-toggle" id="btnAvailPresent" onclick="toggleAvailFilter()">필터 OFF</button>
+      <button class="pp-avail-toggle" id="btnAvailPresent" onclick="toggleAvailFilter()">?? OFF</button>
 
 
 
@@ -707,7 +707,7 @@
 
 
 
-    <div class="pp-block-title">&#x1F504; 벤치 선수</div>
+    <div class="pp-block-title">&#x1F504; ?? ??</div>
 
 
 
@@ -735,11 +735,11 @@
 
 
 
-    <button class="stats-sub-btn active" data-sub="personal" onclick="switchStatsSub('personal')">개인 통계</button>
+    <button class="stats-sub-btn active" data-sub="personal" onclick="switchStatsSub('personal')">?? ??</button>
 
 
 
-    <button class="stats-sub-btn" data-sub="team" onclick="switchStatsSub('team')">팀 통계</button>
+    <button class="stats-sub-btn" data-sub="team" onclick="switchStatsSub('team')">? ??</button>
 
 
 
@@ -807,11 +807,11 @@
 
 
 
-    <button class="btn-new-record admin-only" onclick="openMatchModal()"><i class="ti ti-plus"></i> 경기 결과 기록</button>
+    <button class="btn-new-record admin-only" onclick="openMatchModal()"><i class="ti ti-plus"></i> ?? ?? ??</button>
 
 
 
-    <div class="records-section-title">경기 기록</div>
+    <div class="records-section-title">?? ??</div>
 
 
 
@@ -839,7 +839,7 @@
 
 
 
-    <h3 id="modalTitle">선수 추가</h3>
+    <h3 id="modalTitle">?? ??</h3>
 
 
 
@@ -847,11 +847,11 @@
 
 
 
-      <label>이름</label>
+      <label>??</label>
 
 
 
-      <input type="text" id="inputName" placeholder="선수 이름" autocomplete="off">
+      <input type="text" id="inputName" placeholder="?? ??" autocomplete="off">
 
 
 
@@ -863,11 +863,11 @@
 
 
 
-      <label>등번호</label>
+      <label>???</label>
 
 
 
-      <input type="number" id="inputJersey" placeholder="등번호(예: 10)" min="1" max="99">
+      <input type="number" id="inputJersey" placeholder="???(?: 10)" min="1" max="99">
 
 
 
@@ -879,7 +879,7 @@
 
 
 
-      <label>포지션 선택(복수 선택 가능)</label>
+      <label>??? ??(?? ?? ??)</label>
 
 
 
@@ -895,7 +895,7 @@
 
 
 
-      <label>포지션별 OVR <span style="font-size:11px;color:var(--text3)">1~39=&#x2605; 40~54=&#x2605;&#x2605; 55~69=&#x2605;&#x2605;&#x2605; 70~84=&#x2605;&#x2605;&#x2605;&#x2605; 85+=&#x2605;&#x2605;&#x2605;&#x2605;&#x2605;</span></label>
+      <label>???? OVR <span style="font-size:11px;color:var(--text3)">1~39=&#x2605; 40~54=&#x2605;&#x2605; 55~69=&#x2605;&#x2605;&#x2605; 70~84=&#x2605;&#x2605;&#x2605;&#x2605; 85+=&#x2605;&#x2605;&#x2605;&#x2605;&#x2605;</span></label>
 
 
 
@@ -911,7 +911,7 @@
 
 
 
-      <label>폼 보너스 <span style="font-size:11px;color:var(--text3)">현재 컨디션 OVR 보정값 (&#xB1; 최대 99)</span></label>
+      <label>? ??? <span style="font-size:11px;color:var(--text3)">?? ??? OVR ??? (&#xB1; ?? 99)</span></label>
 
 
 
@@ -947,7 +947,7 @@
 
 
 
-        <span>용병 (외부 선수) &mdash; 리워드 &middot; 수당 제외</span>
+        <span>?? (?? ??) &mdash; ??? &middot; ?? ??</span>
 
 
 
@@ -963,11 +963,11 @@
 
 
 
-      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-cancel" onclick="closeModal()">??</button>
 
 
 
-      <button class="btn-save-modal" onclick="savePlayer()">저장</button>
+      <button class="btn-save-modal" onclick="savePlayer()">??</button>
 
 
 
@@ -991,7 +991,7 @@
 
 
 
-  <div class="pos-popup-title" id="posPopupTitle">포지션 선택</div>
+  <div class="pos-popup-title" id="posPopupTitle">??? ??</div>
 
 
 
@@ -999,19 +999,19 @@
 
 
 
-  <button class="pos-popup-swap" id="posPopupSwapBtn" onclick="openSwapPopup(popupTargetPid)">자리 교체</button>
+  <button class="pos-popup-swap" id="posPopupSwapBtn" onclick="openSwapPopup(popupTargetPid)">?? ??</button>
 
 
 
-  <button class="pos-popup-sub" id="posPopupSubBtn" onclick="openSubPopup(popupTargetPid)">교체 예정 등록 / 해제</button>
+  <button class="pos-popup-sub" id="posPopupSubBtn" onclick="openSubPopup(popupTargetPid)">?? ?? ?? / ??</button>
 
 
 
-  <button class="pos-popup-bench" id="posPopupBenchBtn" onclick="sendToBenchFromPopup()">벤치로 보내기</button>
+  <button class="pos-popup-bench" id="posPopupBenchBtn" onclick="sendToBenchFromPopup()">??? ???</button>
 
 
 
-  <button class="pos-popup-close" onclick="closePosPopup()">닫기</button>
+  <button class="pos-popup-close" onclick="closePosPopup()">??</button>
 
 
 
@@ -1027,7 +1027,7 @@
 
 
 
-    <h3>경기 결과 기록</h3>
+    <h3>?? ?? ??</h3>
 
 
 
@@ -1035,7 +1035,7 @@
 
 
 
-      <div class="modal-section-title">기본 정보</div>
+      <div class="modal-section-title">?? ??</div>
 
 
 
@@ -1043,11 +1043,11 @@
 
 
 
-        <label>우리 팀</label>
+        <label>?? ?</label>
 
 
 
-        <input type="text" id="matchMyTeam" placeholder="우리 FC" autocomplete="off">
+        <input type="text" id="matchMyTeam" placeholder="?? FC" autocomplete="off">
 
 
 
@@ -1059,11 +1059,11 @@
 
 
 
-        <label>상대 팀</label>
+        <label>?? ?</label>
 
 
 
-        <input type="text" id="matchOppTeam" placeholder="상대 FC" autocomplete="off">
+        <input type="text" id="matchOppTeam" placeholder="?? FC" autocomplete="off">
 
 
 
@@ -1075,7 +1075,7 @@
 
 
 
-        <label>경기 날짜</label>
+        <label>?? ??</label>
 
 
 
@@ -1091,7 +1091,7 @@
 
 
 
-        <label>스코어</label>
+        <label>???</label>
 
 
 
@@ -1127,11 +1127,11 @@
 
 
 
-      <div class="modal-section-title">출전 명단
+      <div class="modal-section-title">?? ??
 
 
 
-        <button type="button" class="btn-match-sync" onclick="syncMatchFromFormation()">포메이션에서 불러오기</button>
+        <button type="button" class="btn-match-sync" onclick="syncMatchFromFormation()">?????? ????</button>
 
 
 
@@ -1151,7 +1151,7 @@
 
 
 
-      <div class="modal-section-title">골 &#xB7; 어시스트</div>
+      <div class="modal-section-title">? &#xB7; ????</div>
 
 
 
@@ -1167,7 +1167,7 @@
 
 
 
-      <div class="modal-section-title">이번 경기 MOM (Man of the Match)</div>
+      <div class="modal-section-title">?? ?? MOM (Man of the Match)</div>
 
 
 
@@ -1183,11 +1183,11 @@
 
 
 
-      <button class="btn-cancel" onclick="closeMatchModal()">취소</button>
+      <button class="btn-cancel" onclick="closeMatchModal()">??</button>
 
 
 
-      <button class="btn-save-modal" onclick="saveMatch()">저장</button>
+      <button class="btn-save-modal" onclick="saveMatch()">??</button>
 
 
 
@@ -1211,7 +1211,7 @@
 
 
 
-    <h3 id="statHistoryTitle">경기별 기록</h3>
+    <h3 id="statHistoryTitle">??? ??</h3>
 
 
 
@@ -1223,7 +1223,7 @@
 
 
 
-      <button class="btn-cancel" onclick="closeStatHistory()">닫기</button>
+      <button class="btn-cancel" onclick="closeStatHistory()">??</button>
 
 
 
@@ -1247,7 +1247,7 @@
 
 
 
-    <h3>관리자 옵션</h3>
+    <h3>??? ??</h3>
 
 
 
@@ -1255,15 +1255,15 @@
 
 
 
-      <button class="btn-save-modal" style="background:#ef4444" onclick="exitAdminMode()">관리자 모드 해제</button>
+      <button class="btn-save-modal" style="background:#ef4444" onclick="exitAdminMode()">??? ?? ??</button>
 
 
 
-      <button class="btn-save-modal" onclick="openPwChangeModal()">비밀번호 변경</button>
+      <button class="btn-save-modal" onclick="openPwChangeModal()">???? ??</button>
 
 
 
-      <button class="btn-cancel" onclick="closeAdminOptionsModal()">취소</button>
+      <button class="btn-cancel" onclick="closeAdminOptionsModal()">??</button>
 
 
 
@@ -1287,7 +1287,7 @@
 
 
 
-    <h3>비밀번호 변경</h3>
+    <h3>???? ??</h3>
 
 
 
@@ -1295,11 +1295,11 @@
 
 
 
-      <label>현재 비밀번호</label>
+      <label>?? ????</label>
 
 
 
-      <input type="password" id="pwCurrent" inputmode="numeric" placeholder="현재 비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwNew').focus()">
+      <input type="password" id="pwCurrent" inputmode="numeric" placeholder="?? ????" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwNew').focus()">
 
 
 
@@ -1311,11 +1311,11 @@
 
 
 
-      <label>새 비밀번호</label>
+      <label>? ????</label>
 
 
 
-      <input type="password" id="pwNew" inputmode="numeric" placeholder="새 비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwConfirm').focus()">
+      <input type="password" id="pwNew" inputmode="numeric" placeholder="? ????" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('pwConfirm').focus()">
 
 
 
@@ -1327,11 +1327,11 @@
 
 
 
-      <label>새 비밀번호 확인</label>
+      <label>? ???? ??</label>
 
 
 
-      <input type="password" id="pwConfirm" inputmode="numeric" placeholder="새 비밀번호 입력" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitPwChange()">
+      <input type="password" id="pwConfirm" inputmode="numeric" placeholder="? ???? ??" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitPwChange()">
 
 
 
@@ -1343,11 +1343,11 @@
 
 
 
-      <button class="btn-cancel" onclick="closePwChangeModal()">취소</button>
+      <button class="btn-cancel" onclick="closePwChangeModal()">??</button>
 
 
 
-      <button class="btn-save-modal" onclick="submitPwChange()">저장</button>
+      <button class="btn-save-modal" onclick="submitPwChange()">??</button>
 
 
 
@@ -1371,11 +1371,11 @@
 
 
 
-    <h3>관리자 모드 확인</h3>
+    <h3>??? ?? ??</h3>
 
 
 
-    <p style="font-size:13px;color:var(--text3);margin:0 0 14px">비밀번호를 입력해주세요</p>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 14px">????? ??????</p>
 
 
 
@@ -1383,7 +1383,7 @@
 
 
 
-      <input type="password" id="adminPwInput" inputmode="numeric" placeholder="비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitAdminPw()">
+      <input type="password" id="adminPwInput" inputmode="numeric" placeholder="????" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitAdminPw()">
 
 
 
@@ -1395,11 +1395,11 @@
 
 
 
-      <button class="btn-cancel" onclick="closeAdminModal()">취소</button>
+      <button class="btn-cancel" onclick="closeAdminModal()">??</button>
 
 
 
-      <button class="btn-save-modal" onclick="submitAdminPw()">확인</button>
+      <button class="btn-save-modal" onclick="submitAdminPw()">??</button>
 
 
 
@@ -1491,7 +1491,7 @@
 
 
 
-    <h3>포메이션 저장</h3>
+    <h3>???? ??</h3>
 
 
 
@@ -1499,11 +1499,11 @@
 
 
 
-      <label>이름</label>
+      <label>??</label>
 
 
 
-      <input type="text" id="fsaveNameInput" placeholder="예: 원정 4-3-3" autocomplete="off">
+      <input type="text" id="fsaveNameInput" placeholder="?: ?? 4-3-3" autocomplete="off">
 
 
 
@@ -1515,11 +1515,11 @@
 
 
 
-      <button class="btn-cancel" onclick="closeFsaveModal()">취소</button>
+      <button class="btn-cancel" onclick="closeFsaveModal()">??</button>
 
 
 
-      <button class="btn-save-modal" onclick="confirmSaveFormation()">저장</button>
+      <button class="btn-save-modal" onclick="confirmSaveFormation()">??</button>
 
 
 
@@ -1535,15 +1535,15 @@
 
 
 
-<script src="data.js?v=58"></script>
+<script src="data.js?v=60"></script>
 
 
 
-<script src="api.js?v=58"></script>
+<script src="api.js?v=60"></script>
 
 
 
-<script src="app.js?v=58"></script>
+<script src="app.js?v=60"></script>
 
 
 

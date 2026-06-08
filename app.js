@@ -49,6 +49,12 @@ function applyPresentScales() {
     const el = document.getElementById(id);
     if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
   }
+  // 왼쪽 패널 표시도 동기화
+  const mapL = { bench:'psBenchL', avail:'psAvailL', panel:'psPanelL' };
+  for (const [k, id] of Object.entries(mapL)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
+  }
 }
 function updatePresentPanel() {
   if (!presentMode) return;
@@ -210,15 +216,10 @@ function submitAdminPw() {
 let players = [], editingId = null, fieldSize = {w:0,h:0};
 let matchEvents = {}, matchMom = null, matchBestDef = null, matchBestDef2 = null, editingMatchId = null;
 
-// ── 선수 가치 표기 (실제 원 × 1,000,000 → 한국어 단위) ──
+// ── 선수 가치 표기 (실제 원 × 1,000,000 → 전체 숫자 + 원) ──
 function formatPlayerValue(wageWon) {
   const val = (wageWon || 0) * 1000000;
   if (val === 0) return null;
-  const uk = Math.floor(val / 100000000);
-  const man = Math.floor((val % 100000000) / 10000);
-  if (uk > 0 && man > 0) return `${uk}\uC5B5 ${man}\uB9CC`;
-  if (uk > 0) return `${uk}\uC5B5`;
-  if (man > 0) return `${man}\uB9CC`;
   return val.toLocaleString();
 }
 
@@ -422,13 +423,15 @@ function switchQuarter(q) {
 }
 function updateQuarterButtons() {
   for (let q = 1; q <= 4; q++) {
-    const btn = document.getElementById('q'+q+'btn');
-    if (!btn) continue;
     const isActive = q === activeQuarter;
     const qTokens = q === activeQuarter ? fieldTokens : (quarterData[q]?.tokens || []);
     const hasPlayers = qTokens.length > 0;
-    btn.classList.toggle('active', isActive);
-    btn.classList.toggle('has-players', hasPlayers && !isActive);
+    // 일반 쿼터 바 버튼
+    const btn = document.getElementById('q'+q+'btn');
+    if (btn) { btn.classList.toggle('active', isActive); btn.classList.toggle('has-players', hasPlayers && !isActive); }
+    // 프레젠테이션 플로팅 버튼
+    const pbtn = document.getElementById('pq'+q+'btn');
+    if (pbtn) { pbtn.classList.toggle('active', isActive); pbtn.classList.toggle('has-players', hasPlayers && !isActive); }
   }
 }
 function quarterLabel(quarters) {
@@ -1031,19 +1034,32 @@ function renderHome() {
   stopSlideTimer();
   if (photoUrls.length > 1) startSlideTimer();
   // 클럽원 그리드
+  const members    = players.filter(p => !p.isMercenary);
+  const mercenaries = players.filter(p => p.isMercenary);
   const countEl = document.getElementById('homeMemberCount');
-  if (countEl) countEl.textContent = `(${players.length}명)`;
+  if (countEl) countEl.textContent = `(${members.length}명)`;
   const grid = document.getElementById('homeMemberGrid');
   if (grid) {
-    const sorted = [...players].sort((a, b) => {
+    const sortFn = (a, b) => {
       if (a.jersey == null && b.jersey == null) return 0;
       if (a.jersey == null) return 1;
       if (b.jersey == null) return -1;
       return a.jersey - b.jersey;
-    });
-    grid.innerHTML = sorted.length
-      ? sorted.map(p => `<div class="home-member-chip">${p.jersey != null ? `<span class="home-member-no">${p.jersey}</span>` : ''}${p.name}</div>`).join('')
-      : '<div style="font-size:12px;color:var(--text3)">명단 탭에서 선수를 추가해주세요</div>';
+    };
+    const sortedMembers = [...members].sort(sortFn);
+    const sortedMercs   = [...mercenaries].sort(sortFn);
+    const memberChips = sortedMembers.map(p =>
+      `<div class="home-member-chip">${p.jersey != null ? `<span class="home-member-no">${p.jersey}</span>` : ''}${p.name}</div>`
+    ).join('');
+    const mercChips = sortedMercs.map(p =>
+      `<div class="home-member-chip mercenary">${p.jersey != null ? `<span class="home-member-no">${p.jersey}</span>` : ''}${p.name}</div>`
+    ).join('');
+    const mercSection = sortedMercs.length
+      ? `<div class="home-section-divider">\uC6A9\uBCD1 (${sortedMercs.length}\uBA85)</div>${mercChips}`
+      : '';
+    grid.innerHTML = (sortedMembers.length || sortedMercs.length)
+      ? memberChips + mercSection
+      : '<div style="font-size:12px;color:var(--text3)">\uBA85\uB2E8 \uD0ED\uC5D0\uC11C \uC120\uC218\uB97C \uCD94\uAC00\uD574\uC8FC\uC138\uC694</div>';
   }
 }
 function refreshHomeIfVisible() {
@@ -1137,7 +1153,7 @@ function renderRoster() {
       <div class="player-info">
         <div class="player-name-row"><span class="player-name">${p.name}</span>${mercenaryBadge}${ovrText}</div>
         <div class="ovr-pos-list">${posOvrTags||'<span style="font-size:11px;color:var(--text3)">포지션 없음</span>'}</div>
-        ${valueStr ? `<div class="player-value-badge">&#x1F4B0; ${valueStr}</div>` : ''}
+        ${valueStr ? `<div class="player-value-badge">선수 가치 : ${valueStr}원</div>` : ''}
       </div>
       ${isAdmin ? `
       <button class="btn-icon" onclick="openEditModal(${p.id})"><i class="ti ti-edit"></i></button>

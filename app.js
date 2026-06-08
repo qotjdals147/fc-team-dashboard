@@ -2068,7 +2068,7 @@ function renderBench(){
   const onField=fieldTokens.map(t=>t.pid);
   const bench=players.filter(p=>{
     if(onField.includes(p.id)) return false;
-    if(sessionAvailablePids !== null && !sessionAvailablePids.has(p.id)) return false;
+    if(sessionAvailablePids !== null && !sessionAvailablePids.has(String(p.id))) return false;
     return true;
   });
   const el=document.getElementById('benchList');
@@ -2109,7 +2109,7 @@ function bestPosForSlot(p, slotLabel) {
 }
 function pickBestPlayerForSlot(slotLabel, used) {
   // 오늘 멤버 필터가 활성화된 경우 가용 선수만 대상
-  const avail = p => sessionAvailablePids === null || sessionAvailablePids.has(p.id);
+  const avail = p => sessionAvailablePids === null || sessionAvailablePids.has(String(p.id));
   let candidates=players.filter(p=>!used.has(p.id)&&avail(p)&&p.positions.some(pos=>slotAcceptsPos(slotLabel,pos)));
   if(!candidates.length&&slotLabel==='GK') candidates=players.filter(p=>!used.has(p.id)&&avail(p)&&p.positions.includes('GK'));
   if(!candidates.length) return null;
@@ -2145,8 +2145,15 @@ function saveFieldState(){ persistField().catch(handleSaveError); }
 // ── 오늘 멤버 필터 (세션 전용) ──
 function toggleAvailFilter() {
   if (sessionAvailablePids === null) {
-    sessionAvailablePids = new Set(players.map(p => p.id));
+    // 필터 ON: 현재 쿼터 필드 전부 비우고, 빈 Set으로 시작
+    fieldTokens = [];
+    quarterData[activeQuarter] = { ...(quarterData[activeQuarter] || {}), formation: getFormation(), tokens: [] };
+    saveFieldState();
+    drawFieldCanvas(slotHighlight);
+    renderField();
+    sessionAvailablePids = new Set();
   } else {
+    // 필터 OFF: 전체 해제
     sessionAvailablePids = null;
   }
   renderAvailPanel();
@@ -2155,8 +2162,21 @@ function toggleAvailFilter() {
 }
 function toggleAvailPlayer(pid) {
   if (!sessionAvailablePids) return;
-  if (sessionAvailablePids.has(pid)) sessionAvailablePids.delete(pid);
-  else sessionAvailablePids.add(pid);
+  const key = String(pid);
+  if (sessionAvailablePids.has(key)) {
+    sessionAvailablePids.delete(key);
+    // 필드에 배치돼 있으면 함께 제거
+    const onField = fieldTokens.some(t => String(t.pid) === key);
+    if (onField) {
+      fieldTokens = fieldTokens.filter(t => String(t.pid) !== key);
+      quarterData[activeQuarter] = { ...(quarterData[activeQuarter] || {}), formation: getFormation(), tokens: [...fieldTokens] };
+      saveFieldState();
+      drawFieldCanvas(slotHighlight);
+      renderField();
+    }
+  } else {
+    sessionAvailablePids.add(key);
+  }
   renderAvailPanel();
   renderBench();
   updateAvailBtn();
@@ -2166,10 +2186,10 @@ function renderAvailPanel() {
   if (!panel) return;
   if (sessionAvailablePids === null) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  panel.innerHTML = '<div style="font-size:11px;color:var(--text2);margin-bottom:5px;font-weight:600">&#xC624;&#xB298; &#xC0AC;&#xC6A9; &#xAC00;&#xB2A5; &#xBA64;&#xBC84; (&#xBC21;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</div>'
+  panel.innerHTML = '<div style="font-size:11px;color:var(--text2);margin-bottom:5px;font-weight:600">&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; (&#xBCA4;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</div>'
     + '<div class="avail-chips">'
     + players.map(p =>
-        `<button type="button" class="avail-chip ${sessionAvailablePids.has(p.id)?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
+        `<button type="button" class="avail-chip ${sessionAvailablePids.has(String(p.id))?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
       ).join('')
     + '</div>';
 }
@@ -2177,11 +2197,11 @@ function updateAvailBtn() {
   const btn = document.getElementById('btnAvail');
   if (!btn) return;
   if (sessionAvailablePids === null) {
-    btn.textContent = '&#x1F4C5;';
+    btn.innerHTML = '&#x1F465; &#xC624;&#xB298; &#xBA64;&#xBC84;';
     btn.classList.remove('active');
-    btn.title = '&#xC624;&#xB298; &#xBA64;&#xBC84; &#xD544;&#xD130;';
+    btn.title = '&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; &#xD544;&#xD130;';
   } else {
-    btn.textContent = '&#x1F4C5; ' + sessionAvailablePids.size + '&#xBA85;';
+    btn.innerHTML = '&#x2714; &#xC624;&#xB298; &#xBA64;&#xBC84; ON &middot; ' + sessionAvailablePids.size + '&#xBA85;';
     btn.classList.add('active');
     btn.title = '&#xD544;&#xD130; &#xD574;&#xC81C;';
   }

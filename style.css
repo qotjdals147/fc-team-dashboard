@@ -89,8 +89,8 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .slide-dot { width:7px; height:7px; border-radius:50%; border:none; background:rgba(255,255,255,0.45); cursor:pointer; padding:0; transition:background .2s,transform .2s; }
 .slide-dot.active { background:#fff; transform:scale(1.25); }
 /* 오늘 멤버 필터 */
-.avail-btn { padding:3px 9px; border-radius:20px; border:1px solid var(--border2); background:var(--bg); color:var(--text2); font-size:11px; font-weight:700; cursor:pointer; transition:all .15s; white-space:nowrap; }
-.avail-btn.active { background:#2563eb; color:#fff; border-color:transparent; }
+.avail-btn { padding:3px 10px; border-radius:20px; border:1px solid var(--border2); background:var(--bg); color:var(--text2); font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; white-space:nowrap; }
+.avail-btn.active { background:#2563eb; color:#fff; border-color:transparent; box-shadow:0 0 0 2px rgba(37,99,235,.3); }
 .avail-panel { padding:8px 12px 6px; background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0; }
 .avail-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
 .avail-chip { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; border:1px solid var(--border2); font-size:11px; cursor:pointer; transition:all .15s; }

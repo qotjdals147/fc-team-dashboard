@@ -1,6 +1,6 @@
 // ── 프레젠테이션 모드 ──
 let presentMode = false;
-let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1 };
+let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1, panel: 1.2 };
 let availPanelCollapsed = false;
 function togglePresentMode() {
   if (!isAdmin) return;
@@ -20,7 +20,10 @@ function togglePresentMode() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     drawFieldCanvas();
     renderField();
+    renderBench();
+    renderAvailPanel();
     if (presentMode) { applyPresentScales(); updatePresentPanel(); }
+    updateAvailBtn();
   }));
 }
 
@@ -39,8 +42,9 @@ function applyPresentScales() {
   root.style.setProperty('--ps-bench',   String(presentScales.bench   || 1));
   root.style.setProperty('--ps-avail',   String(presentScales.avail   || 1));
   root.style.setProperty('--ps-quarter', String(presentScales.quarter || 1));
+  root.style.setProperty('--ps-panel',   String(presentScales.panel   || 1.2));
   // val 표시
-  const map = { token:'psToken', bench:'psBench', avail:'psAvail', quarter:'psQuarter' };
+  const map = { token:'psToken', bench:'psBench', avail:'psAvail', quarter:'psQuarter', panel:'psPanel' };
   for (const [k, id] of Object.entries(map)) {
     const el = document.getElementById(id);
     if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
@@ -205,6 +209,18 @@ function submitAdminPw() {
 // subPid: 교체 예정 선수 pid (optional)
 let players = [], editingId = null, fieldSize = {w:0,h:0};
 let matchEvents = {}, matchMom = null, matchBestDef = null, matchBestDef2 = null, editingMatchId = null;
+
+// ── 선수 가치 표기 (실제 원 × 1,000,000 → 한국어 단위) ──
+function formatPlayerValue(wageWon) {
+  const val = (wageWon || 0) * 1000000;
+  if (val === 0) return null;
+  const uk = Math.floor(val / 100000000);
+  const man = Math.floor((val % 100000000) / 10000);
+  if (uk > 0 && man > 0) return `${uk}\uC5B5 ${man}\uB9CC`;
+  if (uk > 0) return `${uk}\uC5B5`;
+  if (man > 0) return `${man}\uB9CC`;
+  return val.toLocaleString();
+}
 
 // ── 수당 기준 (meta.wageRates로 오버라이드 가능) ──
 const WAGE_DEFAULTS = { attendance:50, win:100, cleansheet:150, goal:300, assist:200, bestDef:500, bestDef2:300, mom:800 };
@@ -1105,6 +1121,8 @@ function renderRoster() {
       return `<span class="ovr-pos-item">${pos}${ov!=null?' '+ov:''}</span>`;
     }).join('');
     const jersey = p.jersey != null ? p.jersey : '—';
+    const wage = computePlayerTotalWage(p.id);
+    const valueStr = formatPlayerValue(wage);
     return `<div class="player-card">
       ${isAdmin ? `<div class="num-ctrl">
         <button class="btn-num" onclick="movePlayerNum(${p.id},-1)" ${i===0?'disabled':''}>▲</button>
@@ -1114,6 +1132,7 @@ function renderRoster() {
       <div class="player-info">
         <div class="player-name-row"><span class="player-name">${p.name}</span>${ovrText}</div>
         <div class="ovr-pos-list">${posOvrTags||'<span style="font-size:11px;color:var(--text3)">포지션 없음</span>'}</div>
+        ${valueStr ? `<div class="player-value-badge">&#x1F4B0; ${valueStr}</div>` : ''}
       </div>
       ${isAdmin ? `
       <button class="btn-icon" onclick="openEditModal(${p.id})"><i class="ti ti-edit"></i></button>
@@ -1694,12 +1713,12 @@ function drawFieldCanvas(highlightSlot) {
 
   let W, H;
   if (presentMode) {
-    // 발표 모드: 우측 패널(PC 200px) 고려해서 필드 너비 계산
+    // 발표 모드: 좌/우 패널(PC 각 210px) 고려해서 필드 너비 계산
     const panelW = vpW >= 600 ? 210 : 0;
     const presentBarH = 36;
     const benchH = 64;
     const availH = vpH - presentBarH - benchH - 12;
-    const availW = vpW - 24 - panelW;
+    const availW = vpW - 24 - panelW * 2;
     H = Math.min(availH, Math.round(availW * RATIO));
     W = Math.round(H / RATIO);
     if (W > availW) { W = availW; H = Math.round(W * RATIO); }
@@ -2188,8 +2207,14 @@ function renderBench(){
     if(sessionAvailablePids !== null && !sessionAvailablePids.has(String(p.id))) return false;
     return true;
   });
-  const el=document.getElementById('benchList');
-  if(!bench.length){el.innerHTML='<span style="font-size:12px;color:var(--text3)">전원 출전 중</span>';return;}
+  // 프레젠테이션 모드: 좌측 패널 사용, 일반 모드: 기존 benchList 사용
+  const targetId = presentMode ? 'presentBenchList' : 'benchList';
+  const altId = presentMode ? 'benchList' : 'presentBenchList';
+  const altEl = document.getElementById(altId);
+  if (altEl) altEl.innerHTML = '';
+  const el=document.getElementById(targetId);
+  if(!el) return;
+  if(!bench.length){el.innerHTML='<span style="font-size:12px;color:var(--text3)">\uC804\uC6D0 \uCD9C\uC804 \uC911</span>';return;}
   el.innerHTML='';
   bench.forEach(p=>{
     const ovr=getBestOvr(p);
@@ -2299,35 +2324,61 @@ function toggleAvailPlayer(pid) {
   updateAvailBtn();
 }
 function renderAvailPanel() {
+  // 프레젠테이션 모드: 좌측 패널 내 presentAvailArea 사용
+  if (presentMode) {
+    const area = document.getElementById('presentAvailArea');
+    if (!area) return;
+    if (sessionAvailablePids === null) {
+      area.innerHTML = '<div class="pp-avail-inactive">\uD544\uD130 \uBE44\uD65C\uC131 &middot; \uC804\uC6D0 \uCD9C\uC804 \uAC00\uB2A5</div>';
+    } else {
+      area.innerHTML =
+        '<div class="avail-chips">'
+        + players.map(p =>
+            `<button type="button" class="avail-chip ${sessionAvailablePids.has(String(p.id))?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
+          ).join('')
+        + '</div>';
+    }
+    // 일반 availPanel은 비움
+    const oldPanel = document.getElementById('availPanel');
+    if (oldPanel) { oldPanel.style.display = 'none'; oldPanel.innerHTML = ''; }
+    return;
+  }
+  // 일반 모드
   const panel = document.getElementById('availPanel');
   if (!panel) return;
   if (sessionAvailablePids === null) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  const icon = availPanelCollapsed ? '&#x25B6;' : '&#x25BC;';
-  const chips = availPanelCollapsed ? '' :
-    '<div class="avail-chips">'
+  panel.innerHTML =
+    `<div class="avail-panel-header">
+       <span>\uC624\uB298 \uCC38\uC804 \uBA64\uBC84 (\uBCA4\uCE58\uC5D0\uB9CC \uBC18\uC601)</span>
+     </div>`
+    + '<div class="avail-chips">'
     + players.map(p =>
         `<button type="button" class="avail-chip ${sessionAvailablePids.has(String(p.id))?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
       ).join('')
     + '</div>';
-  panel.innerHTML =
-    `<div class="avail-panel-header" onclick="toggleAvailCollapse()">
-       <span>&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; (&#xBCA4;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</span>
-       <span class="avail-collapse-icon">${icon}</span>
-     </div>`
-    + chips;
 }
 function updateAvailBtn() {
   const btn = document.getElementById('btnAvail');
-  if (!btn) return;
-  if (sessionAvailablePids === null) {
-    btn.innerHTML = '&#x1F465; &#xC624;&#xB298; &#xBA64;&#xBC84;';
-    btn.classList.remove('active');
-    btn.title = '&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; &#xD544;&#xD130;';
-  } else {
-    btn.innerHTML = '&#x2714; &#xC624;&#xB298; &#xBA64;&#xBC84; ON &middot; ' + sessionAvailablePids.size + '&#xBA85;';
-    btn.classList.add('active');
-    btn.title = '&#xD544;&#xD130; &#xD574;&#xC81C;';
+  if (btn) {
+    if (sessionAvailablePids === null) {
+      btn.innerHTML = '&#x1F465; \uC624\uB298 \uBA64\uBC84';
+      btn.classList.remove('active');
+    } else {
+      btn.innerHTML = '&#x2714; \uC624\uB298 \uBA64\uBC84 ON &middot; ' + sessionAvailablePids.size + '\uBA85';
+      btn.classList.add('active');
+    }
+  }
+  // 좌측 패널 내 버튼도 업데이트
+  const pbtn = document.getElementById('btnAvailPresent');
+  if (pbtn) {
+    if (sessionAvailablePids === null) {
+      pbtn.textContent = '\uD544\uD130 OFF';
+      pbtn.classList.remove('active');
+    } else {
+      pbtn.textContent = '\uD544\uD130 ON \u00B7 ' + sessionAvailablePids.size + '\uBA85';
+      pbtn.classList.add('active');
+    }
   }
 }
 function loadFieldState(){

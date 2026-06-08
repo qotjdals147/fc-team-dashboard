@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>FC 사이트</title>
-<link rel="stylesheet" href="style.css?v=51">
+<link rel="stylesheet" href="style.css?v=52">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
@@ -128,10 +128,29 @@
       <span class="pp-val" id="psQuarter">100%</span>
       <button class="pp-btn" onclick="stepPresentScale('quarter',1)">+</button>
     </div>
+    <div class="pp-scale-row">
+      <span class="pp-label">&#xD328;&#xB110; &#xD06C;&#xAE30;</span>
+      <button class="pp-btn" onclick="stepPresentScale('panel',-1)">&#x2212;</button>
+      <span class="pp-val" id="psPanel">120%</span>
+      <button class="pp-btn" onclick="stepPresentScale('panel',1)">+</button>
+    </div>
   </div>
   <div class="pp-block">
     <div class="pp-block-title">&#x26BD; &#xCFFC;&#xD130; &#xCD9C;&#xC804; &#xD604;&#xD669;</div>
     <div id="ppDashboard" class="pp-dashboard"></div>
+  </div>
+</div>
+<div id="presentPanelLeft" class="present-panel-left">
+  <div class="pp-block">
+    <div class="pp-block-title-row">
+      <span>&#x1F465; 오늘 참전 멤버</span>
+      <button class="pp-avail-toggle" id="btnAvailPresent" onclick="toggleAvailFilter()">필터 OFF</button>
+    </div>
+    <div id="presentAvailArea" class="pp-avail-area"></div>
+  </div>
+  <div class="pp-block">
+    <div class="pp-block-title">&#x1F504; 벤치 선수</div>
+    <div id="presentBenchList" class="pp-bench-list"></div>
   </div>
 </div>
 </div>
@@ -331,8 +350,8 @@
     </div>
   </div>
 </div>
-<script src="data.js?v=51"></script>
-<script src="api.js?v=51"></script>
-<script src="app.js?v=51"></script>
+<script src="data.js?v=52"></script>
+<script src="api.js?v=52"></script>
+<script src="app.js?v=52"></script>
 </body>
 </html>

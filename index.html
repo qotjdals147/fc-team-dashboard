@@ -11,6 +11,8 @@
 
 
 <head>
+<!-- 관리자/총무 전용 요소 즉시 숨김 (JS/CSS 로드 전 깜빡임 방지) -->
+<style>body:not(.is-admin) .admin-only{display:none!important}body:not(.is-treasurer) .treasurer-only{display:none!important}</style>
 
 
 
@@ -26,7 +28,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=57">
+<link rel="stylesheet" href="style.css?v=58">
 
 
 
@@ -1533,15 +1535,15 @@
 
 
 
-<script src="data.js?v=57"></script>
+<script src="data.js?v=58"></script>
 
 
 
-<script src="api.js?v=57"></script>
+<script src="api.js?v=58"></script>
 
 
 
-<script src="app.js?v=57"></script>
+<script src="app.js?v=58"></script>
 
 
 

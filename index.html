@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>FC 사이트</title>
-<link rel="stylesheet" href="style.css?v=50">
+<link rel="stylesheet" href="style.css?v=51">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 </head>
 <body>
@@ -82,7 +82,9 @@
     <button class="quarter-btn" id="q2btn" onclick="switchQuarter(2)">2Q</button>
     <button class="quarter-btn" id="q3btn" onclick="switchQuarter(3)">3Q</button>
     <button class="quarter-btn" id="q4btn" onclick="switchQuarter(4)">4Q</button>
+    <button class="avail-btn admin-only" id="btnAvail" onclick="toggleAvailFilter()" title="&#xC624;&#xB298; &#xBA64;&#xBC84; &#xD544;&#xD130;">&#x1F4C5;</button>
   </div>
+  <div class="avail-panel admin-only" id="availPanel" style="display:none"></div>
   <div class="formation-saves-panel admin-only" id="formationSavesPanel" style="display:none">
     <h4><i class="ti ti-bookmark"></i> 저장된 포메이션</h4>
     <div class="fsave-list" id="formationSavesList"></div>
@@ -107,10 +109,11 @@
   <div class="stats-toolbar" id="statsToolbar">
     <select id="statsYearFilter" class="stats-filter" onchange="renderStats()"></select>
     <select id="statsSortKey" class="stats-filter" onchange="renderStats()">
-      <option value="goals">골</option>
-      <option value="assists">어시스트</option>
-      <option value="attendance">출석수</option>
-      <option value="mom">MOM 순</option>
+      <option value="total">&#xC885;&#xD569;&#xC21C; &#xC815;&#xB82C;</option>
+      <option value="goals">&#xACF8;&#xC21C; &#xC815;&#xB82C;</option>
+      <option value="assists">&#xC5B4;&#xC2DC;&#xC21C; &#xC815;&#xB82C;</option>
+      <option value="attendance">&#xCD9C;&#xC11D;&#xC21C; &#xC815;&#xB82C;</option>
+      <option value="mom">MOM&#xC21C; &#xC815;&#xB82C;</option>
     </select>
   </div>
   <div class="stats-scroll" id="statsContent"></div>
@@ -265,16 +268,18 @@
 </div>
 <div class="modal-bg" id="photoUrlModal">
   <div class="modal modal-sm">
-    <h3>팀 사진 변경</h3>
-    <p class="photo-url-hint">외부 이미지 URL을 입력해주세요. (구글 드라이브 &#xB7; Imgur &#xB7; GitHub 등)<br>구글드라이브는 공유 링크를 붙여넣으면 자동으로 변환됩니다.</p>
-    <div class="form-field">
-      <label>이미지 URL</label>
-      <input type="url" id="photoUrlInput" placeholder="https://..." autocomplete="off">
-    </div>
+    <h3>&#xD300; &#xC0AC;&#xC9C4; &#xAD00;&#xB9AC; (&#xCD5C;&#xB300; 5&#xC7A5;)</h3>
+    <p class="photo-url-hint">&#xAD6C;&#xAE00; &#xB4DC;&#xB77C;&#xC774;&#xBE0C; &#xACF5;&#xC720; &#xB9C1;&#xD06C;&#xB97C; &#xBD99;&#xC5EC;&#xB123;&#xC73C;&#xBA74; &#xC790;&#xB3D9; &#xBCC0;&#xD658;&#xB429;&#xB2C8;&#xB2E4;. Imgur&#xB3C4; &#xAC00;&#xB2A5;.</p>
+    <div class="form-field"><label>&#xC0AC;&#xC9C4; 1</label><input type="url" id="photoUrl0" placeholder="https://..." autocomplete="off"></div>
+    <div class="form-field"><label>&#xC0AC;&#xC9C4; 2</label><input type="url" id="photoUrl1" placeholder="https://..." autocomplete="off"></div>
+    <div class="form-field"><label>&#xC0AC;&#xC9C4; 3</label><input type="url" id="photoUrl2" placeholder="https://..." autocomplete="off"></div>
+    <div class="form-field"><label>&#xC0AC;&#xC9C4; 4</label><input type="url" id="photoUrl3" placeholder="https://..." autocomplete="off"></div>
+    <div class="form-field"><label>&#xC0AC;&#xC9C4; 5</label><input type="url" id="photoUrl4" placeholder="https://..." autocomplete="off"></div>
+    <div class="form-field"><label>&#xC790;&#xB3D9; &#xC804;&#xD658; &#xAC04;&#xACA9; (&#xCD08;, &#xCD5C;&#xC18C; 3)</label><input type="number" id="photoIntervalInput" min="3" max="60" value="10" style="width:80px"></div>
     <div class="modal-actions">
-      <button type="button" class="btn-cancel" onclick="clearTeamPhoto()">사진 삭제</button>
-      <button class="btn-cancel" onclick="closePhotoUrlModal()">취소</button>
-      <button class="btn-save-modal" onclick="saveTeamPhotoUrl()">저장</button>
+      <button type="button" class="btn-cancel" onclick="clearTeamPhoto()">&#xC804;&#xCCB4; &#xC0AD;&#xC81C;</button>
+      <button class="btn-cancel" onclick="closePhotoUrlModal()">&#xCDE8;&#xC18C;</button>
+      <button class="btn-save-modal" onclick="saveTeamPhotos()">&#xC800;&#xC7A5;</button>
     </div>
   </div>
 </div>
@@ -291,8 +296,8 @@
     </div>
   </div>
 </div>
-<script src="data.js?v=50"></script>
-<script src="api.js?v=50"></script>
-<script src="app.js?v=50"></script>
+<script src="data.js?v=51"></script>
+<script src="api.js?v=51"></script>
+<script src="app.js?v=51"></script>
 </body>
 </html>

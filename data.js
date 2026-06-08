@@ -2,14 +2,14 @@
 const ALL_POS = ['GK','CB','LB','RB','CDM','CAM','LW','RW','ST'];
 
 const POS_BG = {
-  GK:'#185FA5',
-  CB:'#3B6D11', LB:'#3B6D11', RB:'#3B6D11',
-  CDM:'#BA7517', CAM:'#BA7517',
-  LW:'#D85A30', RW:'#D85A30', ST:'#D85A30',
-  // 구 포지션 색상 (하위 호환 - 마이그레이션 전 렌더링 대비)
-  DF:'#3B6D11', LWB:'#3B6D11', RWB:'#3B6D11',
-  CM:'#BA7517', MF:'#BA7517',
-  CF:'#D85A30', FW:'#D85A30', LM:'#D85A30', RM:'#D85A30',
+  GK:'#b8860b',                               // GK: 어두운 금/노랑
+  CB:'#1a5fb4', LB:'#1a5fb4', RB:'#1a5fb4',  // 수비: 파랑
+  CDM:'#2e7d32', CAM:'#2e7d32',               // 미드: 초록
+  LW:'#c0392b', RW:'#c0392b', ST:'#c0392b',   // 공격: 빨강
+  // 구 포지션 하위 호환
+  DF:'#1a5fb4', LWB:'#1a5fb4', RWB:'#1a5fb4',
+  CM:'#2e7d32', MF:'#2e7d32',
+  CF:'#c0392b', FW:'#c0392b', LM:'#c0392b', RM:'#c0392b',
 };
 const POS_LAYER = {
   GK:0, CB:1, LB:1, RB:1,

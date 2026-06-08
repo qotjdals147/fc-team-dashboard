@@ -149,6 +149,11 @@ let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
 // 쿼터별 필드 상태: quarterData[1~4] = { formation, tokens } | null
 let quarterData = {1:null,2:null,3:null,4:null};
 let activeQuarter = 1;
+// 슬라이드쇼
+let photoUrls = [], photoInterval = 10, currentPhotoIdx = 0, photoTransforms = [];
+let _slideTimer = null;
+// 오늘 멤버 필터 (세션 전용, 저장 안 함)
+let sessionAvailablePids = null; // null=필터 없음, Set=필터 적용 중
 
 // 팝업 모드: 'pos' | 'sub'
 let popupMode = 'pos', popupTargetPid = null;
@@ -470,15 +475,32 @@ function applyRemoteData(data) {
   myTeamName = data.meta?.myTeam || '';
   // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
   if (data.meta?.adminPw) localStorage.setItem('fc_admin_pw', data.meta.adminPw);
-  teamPhotoUrl = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
-  if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
-  const savedTransform = data.meta?.teamPhotoTransform;
-  if (savedTransform && typeof savedTransform === 'object') {
-    photoTransform = { x: savedTransform.x || 0, y: savedTransform.y || 0, scale: savedTransform.scale || 1 };
+  // 슬라이드쇼 URLs
+  const rawUrls = data.meta?.teamPhotoUrls;
+  if (rawUrls) {
+    try { photoUrls = typeof rawUrls === 'string' ? JSON.parse(rawUrls) : rawUrls; } catch(e) { photoUrls = []; }
   } else {
-    const lt = localStorage.getItem('fc_photo_transform');
-    if (lt) try { photoTransform = JSON.parse(lt); } catch(e) {}
+    const single = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
+    photoUrls = single ? [single] : [];
   }
+  photoUrls = photoUrls.map(u => normalizePhotoUrl(u)).filter(Boolean);
+  teamPhotoUrl = photoUrls[0] || '';
+  if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
+  // 슬라이드 간격
+  const rawInterval = data.meta?.photoInterval;
+  if (rawInterval != null) photoInterval = Math.max(3, Number(rawInterval) || 10);
+  // 슬라이드 transforms
+  const rawPT = data.meta?.teamPhotoTransforms;
+  if (rawPT) {
+    try { photoTransforms = typeof rawPT === 'string' ? JSON.parse(rawPT) : rawPT; } catch(e) { photoTransforms = []; }
+  } else {
+    const st = data.meta?.teamPhotoTransform;
+    photoTransforms = st && typeof st === 'object' ? [{ x: st.x||0, y: st.y||0, scale: st.scale||1 }] : [];
+    const lt = localStorage.getItem('fc_photo_transform');
+    if (!photoTransforms.length && lt) try { photoTransforms = [JSON.parse(lt)]; } catch(e) {}
+  }
+  currentPhotoIdx = 0;
+  photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
   // formationSaves 마이그레이션 (구형식 → q1, 포지션 마이그레이션)
   formationSaves = (data.saves || []).map(sv => {
     const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
@@ -570,7 +592,18 @@ function loadLocalFallback() {
     };
   });
   myTeamName = localStorage.getItem('fc_myteam') || '';
-  teamPhotoUrl = localStorage.getItem('fc_team_photo') || '';
+  const rawPhotosL = localStorage.getItem('fc_team_photos');
+  if (rawPhotosL) { try { photoUrls = JSON.parse(rawPhotosL); } catch(e) {} }
+  else { const s = localStorage.getItem('fc_team_photo'); photoUrls = s ? [s] : []; }
+  photoUrls = photoUrls.map(u => normalizePhotoUrl(u)).filter(Boolean);
+  teamPhotoUrl = photoUrls[0] || '';
+  const rawPT2 = localStorage.getItem('fc_photo_transforms');
+  if (rawPT2) { try { photoTransforms = JSON.parse(rawPT2); } catch(e) {} }
+  else { const lt = localStorage.getItem('fc_photo_transform'); if (lt) try { photoTransforms = [JSON.parse(lt)]; } catch(e) {} }
+  const rawPI = localStorage.getItem('fc_photo_interval');
+  if (rawPI) photoInterval = Math.max(3, parseInt(rawPI) || 10);
+  currentPhotoIdx = 0;
+  photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
   loadFieldState();
 }
 function hasLocalData() {
@@ -646,8 +679,21 @@ async function persistMatches() { await apiSavePartial({ matches }); }
 async function persistSaves() { await apiSavePartial({ saves: formationSaves }); }
 async function persistMeta() {
   const adminPw = localStorage.getItem('fc_admin_pw') || undefined;
-  await apiSavePartial({ meta: { myTeam: myTeamName, teamPhotoUrl: teamPhotoUrl || '', teamPhotoTransform: photoTransform, ...(adminPw ? { adminPw } : {}) } });
-  if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
+  photoTransforms[currentPhotoIdx] = { ...photoTransform };
+  const meta = {
+    myTeam: myTeamName,
+    teamPhotoUrl: photoUrls[0] || '',       // 하위 호환
+    teamPhotoUrls: JSON.stringify(photoUrls),
+    photoInterval: photoInterval,
+    teamPhotoTransform: photoTransform,      // 하위 호환
+    teamPhotoTransforms: JSON.stringify(photoTransforms),
+    ...(adminPw ? { adminPw } : {}),
+  };
+  await apiSavePartial({ meta });
+  localStorage.setItem('fc_team_photos', JSON.stringify(photoUrls));
+  localStorage.setItem('fc_photo_transforms', JSON.stringify(photoTransforms));
+  localStorage.setItem('fc_photo_interval', String(photoInterval));
+  if (photoUrls[0]) localStorage.setItem('fc_team_photo', photoUrls[0]);
   else localStorage.removeItem('fc_team_photo');
   localStorage.setItem('fc_photo_transform', JSON.stringify(photoTransform));
 }
@@ -675,6 +721,7 @@ function applyPhotoTransform() {
 }
 let _photoSaveTimer = null;
 function savePhotoTransform() {
+  photoTransforms[currentPhotoIdx] = { ...photoTransform };
   clearTimeout(_photoSaveTimer);
   _photoSaveTimer = setTimeout(() => {
     persistMeta().catch(handleSaveError);
@@ -682,8 +729,37 @@ function savePhotoTransform() {
 }
 function resetPhotoTransform() {
   photoTransform = { x: 0, y: 0, scale: 1 };
+  photoTransforms[currentPhotoIdx] = { ...photoTransform };
   applyPhotoTransform();
   persistMeta().catch(handleSaveError);
+}
+// ── 슬라이드쇼 ──
+function goToPhoto(idx) {
+  if (!photoUrls.length) return;
+  photoTransforms[currentPhotoIdx] = { ...photoTransform };
+  currentPhotoIdx = ((idx % photoUrls.length) + photoUrls.length) % photoUrls.length;
+  photoTransform = photoTransforms[currentPhotoIdx] || { x:0, y:0, scale:1 };
+  const img = document.getElementById('homePhoto');
+  if (img) { img.src = photoUrls[currentPhotoIdx]; }
+  applyPhotoTransform();
+  updateSlideDots();
+  startSlideTimer();
+}
+function nextPhoto() { goToPhoto(currentPhotoIdx + 1); }
+function prevPhoto() { goToPhoto(currentPhotoIdx - 1); }
+function startSlideTimer() {
+  stopSlideTimer();
+  if (photoUrls.length > 1 && photoInterval > 0) {
+    _slideTimer = setTimeout(() => { nextPhoto(); }, photoInterval * 1000);
+  }
+}
+function stopSlideTimer() {
+  if (_slideTimer) { clearTimeout(_slideTimer); _slideTimer = null; }
+}
+function updateSlideDots() {
+  document.querySelectorAll('.slide-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === currentPhotoIdx);
+  });
 }
 function initPhotoDrag() {
   const wrap = document.getElementById('homePhotoWrap');
@@ -693,7 +769,7 @@ function initPhotoDrag() {
   // 마우스 드래그
   wrap.addEventListener('mousedown', e => {
     if (e.target.closest('button')) return;
-    if (!isAdmin || !teamPhotoUrl) return;
+    if (!isAdmin || !photoUrls.length) return;
     pd = { active: true, startX: e.clientX, startY: e.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
     wrap.style.cursor = 'grabbing';
     e.preventDefault();
@@ -714,7 +790,7 @@ function initPhotoDrag() {
   // 터치 드래그
   let pinchDist0 = 0, pinchScale0 = 1;
   wrap.addEventListener('touchstart', e => {
-    if (!isAdmin || !teamPhotoUrl) return;
+    if (!isAdmin || !photoUrls.length) return;
     if (e.touches.length === 1) {
       const t = e.touches[0];
       pd = { active: true, startX: t.clientX, startY: t.clientY, startTX: photoTransform.x, startTY: photoTransform.y };
@@ -743,7 +819,7 @@ function initPhotoDrag() {
   });
   // 마우스 휠 줌
   wrap.addEventListener('wheel', e => {
-    if (!isAdmin || !teamPhotoUrl) return;
+    if (!isAdmin || !photoUrls.length) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     photoTransform.scale = Math.max(0.3, Math.min(4, photoTransform.scale + delta));
@@ -755,10 +831,12 @@ function renderHome() {
   const nameEl = document.getElementById('homeTeamName');
   if (nameEl) nameEl.textContent = myTeamName || '우리 FC';
   const img = document.getElementById('homePhoto');
-  const ph = document.getElementById('homePhotoPlaceholder');
+  const ph  = document.getElementById('homePhotoPlaceholder');
+  const wrap = document.getElementById('homePhotoWrap');
+  const currentUrl = photoUrls[currentPhotoIdx] || '';
   if (img && ph) {
-    if (teamPhotoUrl) {
-      img.src = teamPhotoUrl;
+    if (currentUrl) {
+      img.src = currentUrl;
       img.draggable = false;
       img.style.display = 'block';
       ph.style.display = 'none';
@@ -771,10 +849,9 @@ function renderHome() {
     }
   }
   initPhotoDrag();
-  // 초기화 버튼 (사진 있을 때만)
-  const wrap = document.getElementById('homePhotoWrap');
+  // 초기화 버튼
   let resetBtn = document.getElementById('photoResetBtn');
-  if (wrap && teamPhotoUrl) {
+  if (wrap && currentUrl) {
     if (!resetBtn) {
       resetBtn = document.createElement('button');
       resetBtn.id = 'photoResetBtn';
@@ -789,6 +866,34 @@ function renderHome() {
   } else if (resetBtn) {
     resetBtn.style.display = 'none';
   }
+  // 슬라이드 UI (prev/next/dots) 재생성
+  if (wrap) {
+    wrap.querySelectorAll('.slide-prev,.slide-next,.slide-dots').forEach(el => el.remove());
+    if (photoUrls.length > 1) {
+      const prev = document.createElement('button');
+      prev.type = 'button'; prev.className = 'slide-prev'; prev.innerHTML = '&#x2039;';
+      prev.onclick = e => { e.stopPropagation(); prevPhoto(); };
+      wrap.appendChild(prev);
+      const next = document.createElement('button');
+      next.type = 'button'; next.className = 'slide-next'; next.innerHTML = '&#x203A;';
+      next.onclick = e => { e.stopPropagation(); nextPhoto(); };
+      wrap.appendChild(next);
+      const dots = document.createElement('div');
+      dots.className = 'slide-dots';
+      photoUrls.forEach((_, i) => {
+        const d = document.createElement('button');
+        d.type = 'button';
+        d.className = 'slide-dot' + (i === currentPhotoIdx ? ' active' : '');
+        d.onclick = e => { e.stopPropagation(); goToPhoto(i); };
+        dots.appendChild(d);
+      });
+      wrap.appendChild(dots);
+    }
+  }
+  // 타이머 재시작
+  stopSlideTimer();
+  if (photoUrls.length > 1) startSlideTimer();
+  // 클럽원 그리드
   const countEl = document.getElementById('homeMemberCount');
   if (countEl) countEl.textContent = `(${players.length}명)`;
   const grid = document.getElementById('homeMemberGrid');
@@ -808,39 +913,43 @@ function refreshHomeIfVisible() {
   if (document.getElementById('tab-home')?.classList.contains('active')) renderHome();
 }
 function openPhotoUrlModal() {
-  document.getElementById('photoUrlInput').value = teamPhotoUrl || '';
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('photoUrl' + i);
+    if (el) el.value = photoUrls[i] || '';
+  }
+  const intEl = document.getElementById('photoIntervalInput');
+  if (intEl) intEl.value = photoInterval;
   document.getElementById('photoUrlModal').classList.add('open');
-  setTimeout(() => document.getElementById('photoUrlInput').focus(), 100);
+  setTimeout(() => document.getElementById('photoUrl0')?.focus(), 100);
 }
 function closePhotoUrlModal() {
   document.getElementById('photoUrlModal').classList.remove('open');
 }
-function saveTeamPhotoUrl() {
-  const raw = document.getElementById('photoUrlInput').value.trim();
-  if (!raw) { alert('URL을 입력해주세요'); return; }
-  if (!/^https?:\/\//i.test(raw)) { alert('http:// 또는 https:// 로 시작하는 주소를 입력해주세요'); return; }
-  const normalized = normalizePhotoUrl(raw);
-  if (normalized === '__onedrive__') {
-    alert('OneDrive/윈도우 공유 링크는 외부에서 직접 표시할 수 없습니다.\n\n사진을 등록하려면:\n① Google Drive에 업로드 후 공유 링크\n② 이미지 호스팅 사이트(예: Imgur)에 업로드 후 직접 링크\n를 사용해 주세요.');
-    return;
+function saveTeamPhotos() {
+  const urls = [];
+  for (let i = 0; i < 5; i++) {
+    const raw = (document.getElementById('photoUrl' + i)?.value || '').trim();
+    if (!raw) continue;
+    if (!/^https?:\/\//i.test(raw)) { alert((i+1) + '번 URL: http:// 또는 https:// 로 시작해야 합니다'); return; }
+    const n = normalizePhotoUrl(raw);
+    if (n === '__onedrive__') { alert('OneDrive 링크는 사용할 수 없습니다. Google Drive 또는 Imgur를 이용해주세요.'); return; }
+    urls.push(n);
   }
-  teamPhotoUrl = normalized;
-  persistMeta().then(() => {
-    closePhotoUrlModal();
-    renderHome();
-  }).catch(handleSaveError);
+  const intVal = Math.max(3, parseInt(document.getElementById('photoIntervalInput')?.value) || 10);
+  photoUrls = urls;
+  photoInterval = intVal;
+  photoTransforms = photoUrls.map((_, i) => photoTransforms[i] || { x:0, y:0, scale:1 });
+  currentPhotoIdx = 0;
+  photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
+  persistMeta().then(() => { closePhotoUrlModal(); renderHome(); }).catch(handleSaveError);
 }
+function saveTeamPhotoUrl() { saveTeamPhotos(); } // 구버전 호환
 function clearTeamPhoto() {
-  if (!teamPhotoUrl && !document.getElementById('photoUrlInput').value.trim()) {
-    closePhotoUrlModal();
-    return;
-  }
-  if (!confirm('단체 사진을 제거할까요?')) return;
-  teamPhotoUrl = '';
-  persistMeta().then(() => {
-    closePhotoUrlModal();
-    renderHome();
-  }).catch(handleSaveError);
+  const anyFilled = Array.from({length:5}, (_, i) => document.getElementById('photoUrl' + i)?.value.trim()).some(Boolean);
+  if (!photoUrls.length && !anyFilled) { closePhotoUrlModal(); return; }
+  if (!confirm('사진을 모두 제거할까요?')) return;
+  photoUrls = []; photoTransforms = []; currentPhotoIdx = 0; photoTransform = {x:0,y:0,scale:1};
+  persistMeta().then(() => { closePhotoUrlModal(); renderHome(); }).catch(handleSaveError);
 }
 function editTeamName() {
   const name = prompt('팀 이름', myTeamName || '우리 FC');
@@ -1957,7 +2066,11 @@ function onGlobalUp(e){
 
 function renderBench(){
   const onField=fieldTokens.map(t=>t.pid);
-  const bench=players.filter(p=>!onField.includes(p.id));
+  const bench=players.filter(p=>{
+    if(onField.includes(p.id)) return false;
+    if(sessionAvailablePids !== null && !sessionAvailablePids.has(p.id)) return false;
+    return true;
+  });
   const el=document.getElementById('benchList');
   if(!bench.length){el.innerHTML='<span style="font-size:12px;color:var(--text3)">전원 출전 중</span>';return;}
   el.innerHTML='';
@@ -1995,8 +2108,10 @@ function bestPosForSlot(p, slotLabel) {
   return matching.sort((a,b)=>(getOvr(p,b)??0)-(getOvr(p,a)??0))[0];
 }
 function pickBestPlayerForSlot(slotLabel, used) {
-  let candidates=players.filter(p=>!used.has(p.id)&&p.positions.some(pos=>slotAcceptsPos(slotLabel,pos)));
-  if(!candidates.length&&slotLabel==='GK') candidates=players.filter(p=>!used.has(p.id)&&p.positions.includes('GK'));
+  // 오늘 멤버 필터가 활성화된 경우 가용 선수만 대상
+  const avail = p => sessionAvailablePids === null || sessionAvailablePids.has(p.id);
+  let candidates=players.filter(p=>!used.has(p.id)&&avail(p)&&p.positions.some(pos=>slotAcceptsPos(slotLabel,pos)));
+  if(!candidates.length&&slotLabel==='GK') candidates=players.filter(p=>!used.has(p.id)&&avail(p)&&p.positions.includes('GK'));
   if(!candidates.length) return null;
   candidates.sort((a,b)=>getOvrForSlot(b,slotLabel)-getOvrForSlot(a,slotLabel));
   return candidates[0];
@@ -2026,6 +2141,51 @@ function clearField(){
   saveFieldState();renderField();
 }
 function saveFieldState(){ persistField().catch(handleSaveError); }
+
+// ── 오늘 멤버 필터 (세션 전용) ──
+function toggleAvailFilter() {
+  if (sessionAvailablePids === null) {
+    sessionAvailablePids = new Set(players.map(p => p.id));
+  } else {
+    sessionAvailablePids = null;
+  }
+  renderAvailPanel();
+  renderBench();
+  updateAvailBtn();
+}
+function toggleAvailPlayer(pid) {
+  if (!sessionAvailablePids) return;
+  if (sessionAvailablePids.has(pid)) sessionAvailablePids.delete(pid);
+  else sessionAvailablePids.add(pid);
+  renderAvailPanel();
+  renderBench();
+  updateAvailBtn();
+}
+function renderAvailPanel() {
+  const panel = document.getElementById('availPanel');
+  if (!panel) return;
+  if (sessionAvailablePids === null) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="font-size:11px;color:var(--text2);margin-bottom:5px;font-weight:600">&#xC624;&#xB298; &#xC0AC;&#xC6A9; &#xAC00;&#xB2A5; &#xBA64;&#xBC84; (&#xBC21;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</div>'
+    + '<div class="avail-chips">'
+    + players.map(p =>
+        `<button type="button" class="avail-chip ${sessionAvailablePids.has(p.id)?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
+      ).join('')
+    + '</div>';
+}
+function updateAvailBtn() {
+  const btn = document.getElementById('btnAvail');
+  if (!btn) return;
+  if (sessionAvailablePids === null) {
+    btn.textContent = '&#x1F4C5;';
+    btn.classList.remove('active');
+    btn.title = '&#xC624;&#xB298; &#xBA64;&#xBC84; &#xD544;&#xD130;';
+  } else {
+    btn.textContent = '&#x1F4C5; ' + sessionAvailablePids.size + '&#xBA85;';
+    btn.classList.add('active');
+    btn.title = '&#xD544;&#xD130; &#xD574;&#xC81C;';
+  }
+}
 function loadFieldState(){
   const migrateTokenPos = t => ({...t, pos: migratePos(t.pos || '')});
   // 1. 쿼터 형식 우선 시도
@@ -2318,6 +2478,7 @@ function renderRecords(){
   if(!matches.length){el.innerHTML='<div class="empty-state">기록된 경기가 없습니다</div>';return;}
   el.innerHTML=matches.map(m=>{
     const res=m.scoreUs>m.scoreOpp?'🏆 승':m.scoreUs===m.scoreOpp?'🤝 무':'💔 패';
+    const cardCls=m.scoreUs>m.scoreOpp?'win':m.scoreUs===m.scoreOpp?'draw':'lose';
 
     const scorerRows=(m.scorers||[]).map(s=>`
       <div class="match-scorer-row">
@@ -2336,7 +2497,7 @@ function renderRecords(){
       return `<span class="match-lineup-tag sub">🔄${s.name}${qb}</span>`;
     }).join('');
     const momBadge=m.momName?`<span class="match-mom">🏅 MOM ${m.momName}</span>`:'';
-    return `<div class="match-card">
+    return `<div class="match-card ${cardCls}">
       <div class="match-score-row">
         <span class="match-team" style="text-align:right">${m.myTeam}</span>
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
@@ -2380,16 +2541,23 @@ function formatStreakPeriod(s) {
   return `${s.from} ~ ${s.to}`;
 }
 function renderPersonalStats(filtered) {
-  const sortKey = document.getElementById('statsSortKey')?.value || 'goals';
-  const rows = computePlayerStats(filtered, players)
+  const sortKey = document.getElementById('statsSortKey')?.value || 'total';
+  const base = computePlayerStats(filtered, players)
     .filter(s => s.attendance > 0 || s.goals > 0 || s.assists > 0 || s.mom > 0)
-    .sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
-  if (!filtered.length) {
-    return '<div class="empty-state">경기 기록이 없습니다</div>';
-  }
-  if (!rows.length) {
-    return '<div class="empty-state">출전·기록 데이터가 없습니다</div>';
-  }
+    .map(r => ({ ...r, total: (r.goals||0) + (r.assists||0) + (r.attendance||0) + (r.mom||0) }));
+  const rows = [...base].sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
+  if (!filtered.length) return '<div class="empty-state">경기 기록이 없습니다</div>';
+  if (!rows.length) return '<div class="empty-state">출전·기록 데이터가 없습니다</div>';
+  // 메달: 동점자는 같은 순위 공유
+  const sortedVals = [...new Set(rows.map(r => r[sortKey]))].sort((a,b) => b-a);
+  const v1 = sortedVals[0] ?? -1, v2 = sortedVals[1] ?? -1, v3 = sortedVals[2] ?? -1;
+  const medal = val => {
+    if (val <= 0) return '';
+    if (val === v1) return '<span class="stat-medal stat-medal-1">1</span>';
+    if (val === v2) return '<span class="stat-medal stat-medal-2">2</span>';
+    if (val === v3) return '<span class="stat-medal stat-medal-3">3</span>';
+    return '';
+  };
   const top = rows[0];
   const totalGoals = rows.reduce((s, r) => s + r.goals, 0);
   const summary = `<div class="stats-summary">
@@ -2401,7 +2569,7 @@ function renderPersonalStats(filtered) {
     const gCls = r.goals > 0 ? 'stat-click' : 'stat-click zero';
     const aCls = r.assists > 0 ? 'stat-click' : 'stat-click zero';
     return `<tr>
-      <td><span class="stat-name">${r.name}</span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}</td>
+      <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span></span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}</td>
       <td>${r.attendance}</td>
       <td><span class="${gCls}" onclick="openStatHistory(${r.pid},'goals')">${r.goals}</span></td>
       <td><span class="${aCls}" onclick="openStatHistory(${r.pid},'assists')">${r.assists}</span></td>
@@ -2539,6 +2707,7 @@ function refreshCurrentTab() {
     else if (t === 'formation') {
       // 포메이션 탭은 캔버스 크기 유지하면서 토큰만 갱신
       renderField();
+      renderBench();
       renderFormationSaves();
     }
     else if (t === 'records') { renderRecords(); }

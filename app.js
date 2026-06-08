@@ -1,5 +1,7 @@
 // ── 프레젠테이션 모드 ──
 let presentMode = false;
+let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1 };
+let availPanelCollapsed = false;
 function togglePresentMode() {
   if (!isAdmin) return;
   presentMode = !presentMode;
@@ -18,7 +20,70 @@ function togglePresentMode() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     drawFieldCanvas();
     renderField();
+    if (presentMode) { applyPresentScales(); updatePresentPanel(); }
   }));
+}
+
+// ── 프레젠테이션 패널 ──
+function stepPresentScale(key, dir) {
+  const min = 0.5, max = 2.5, step = 0.1;
+  const cur = presentScales[key] || 1;
+  presentScales[key] = Math.max(min, Math.min(max, Math.round((cur + dir * step) * 10) / 10));
+  applyPresentScales();
+  drawFieldCanvas();
+  updatePresentPanel();
+  persistMeta().catch(() => {});
+}
+function applyPresentScales() {
+  const root = document.documentElement;
+  root.style.setProperty('--ps-bench',   String(presentScales.bench   || 1));
+  root.style.setProperty('--ps-avail',   String(presentScales.avail   || 1));
+  root.style.setProperty('--ps-quarter', String(presentScales.quarter || 1));
+  // val 표시
+  const map = { token:'psToken', bench:'psBench', avail:'psAvail', quarter:'psQuarter' };
+  for (const [k, id] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
+  }
+}
+function updatePresentPanel() {
+  if (!presentMode) return;
+  const dash = document.getElementById('ppDashboard');
+  if (!dash) return;
+  // 쿼터별 선수 참여 집계
+  const participation = {};
+  for (let q = 1; q <= 4; q++) {
+    const tokens = q === activeQuarter ? fieldTokens : (quarterData[q]?.tokens || []);
+    tokens.forEach(t => {
+      const key = String(t.pid);
+      if (!participation[key]) participation[key] = [];
+      participation[key].push(q);
+    });
+  }
+  const entries = Object.entries(participation);
+  if (!entries.length) {
+    dash.innerHTML = '<div class="pp-empty">&#xBC30;&#xCE58;&#xB41C; &#xC120;&#xC218; &#xC5C6;&#xC74C;</div>';
+    return;
+  }
+  dash.innerHTML = entries.map(([pid, quarters]) => {
+    const p = players.find(pl => String(pl.id) === pid);
+    if (!p) return '';
+    const label = (p.jersey != null ? '#' + p.jersey + '\u00a0' : '') + p.name;
+    const isAll = quarters.length === 4;
+    const badges = isAll
+      ? '<span class="pp-q-all">&#xC804;&#xCCB4;</span>'
+      : [1,2,3,4].map(q =>
+          `<span class="pp-q-badge ${quarters.includes(q)?'on':'off'}">${q}Q</span>`
+        ).join('');
+    return `<div class="pp-row"><span class="pp-name">${label}</span><span class="pp-badges">${badges}</span></div>`;
+  }).filter(Boolean).join('');
+}
+function togglePresentPanel() {
+  document.getElementById('presentPanel')?.classList.toggle('mobile-open');
+}
+function toggleAvailCollapse() {
+  availPanelCollapsed = !availPanelCollapsed;
+  renderAvailPanel();
 }
 
 // ── 관리자 모드 ──
@@ -289,6 +354,7 @@ function switchQuarter(q) {
   drawFieldCanvas();
   renderField();
   renderBench();
+  updatePresentPanel();
 }
 function updateQuarterButtons() {
   for (let q = 1; q <= 4; q++) {
@@ -501,6 +567,11 @@ function applyRemoteData(data) {
   }
   currentPhotoIdx = 0;
   photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
+  // 프레젠테이션 스케일
+  const rawPS = data.meta?.presentScales;
+  if (rawPS) {
+    try { presentScales = { ...presentScales, ...(typeof rawPS === 'string' ? JSON.parse(rawPS) : rawPS) }; } catch(e) {}
+  }
   // formationSaves 마이그레이션 (구형식 → q1, 포지션 마이그레이션)
   formationSaves = (data.saves || []).map(sv => {
     const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
@@ -688,6 +759,7 @@ async function persistMeta() {
     teamPhotoTransform: photoTransform,      // 하위 호환
     teamPhotoTransforms: JSON.stringify(photoTransforms),
     ...(adminPw ? { adminPw } : {}),
+    presentScales: JSON.stringify(presentScales),
   };
   await apiSavePartial({ meta });
   localStorage.setItem('fc_team_photos', JSON.stringify(photoUrls));
@@ -1577,11 +1649,12 @@ function drawFieldCanvas(highlightSlot) {
 
   let W, H;
   if (presentMode) {
-    // 발표 모드: 뷰포트 기준으로 최대한 크게 (present-bar ~36px, bench-strip ~64px 제외)
+    // 발표 모드: 우측 패널(PC 200px) 고려해서 필드 너비 계산
+    const panelW = vpW >= 600 ? 210 : 0;
     const presentBarH = 36;
     const benchH = 64;
     const availH = vpH - presentBarH - benchH - 12;
-    const availW = vpW - 24;
+    const availW = vpW - 24 - panelW;
     H = Math.min(availH, Math.round(availW * RATIO));
     W = Math.round(H / RATIO);
     if (W > availW) { W = availW; H = Math.round(W * RATIO); }
@@ -1605,10 +1678,9 @@ function drawFieldCanvas(highlightSlot) {
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   fieldSize={w:W,h:H};
 
-  // 토큰 UI 스케일: 340px 기준, 발표 모드에서는 상한 없이 확대 허용
-  const tkScale = presentMode
-    ? Math.max(0.6, W / 340)
-    : Math.min(1, Math.max(0.6, W / 340));
+  // 토큰 UI 스케일: 340px 기준, 발표 모드에서는 상한 없이 확대 허용 + 스케일 조절 반영
+  const baseScale = presentMode ? Math.max(0.6, W / 340) : Math.min(1, Math.max(0.6, W / 340));
+  const tkScale = presentMode ? baseScale * (presentScales.token || 1) : baseScale;
   document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
   drawGrass(canvas);
   drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);
@@ -2186,12 +2258,19 @@ function renderAvailPanel() {
   if (!panel) return;
   if (sessionAvailablePids === null) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  panel.innerHTML = '<div style="font-size:11px;color:var(--text2);margin-bottom:5px;font-weight:600">&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; (&#xBCA4;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</div>'
-    + '<div class="avail-chips">'
+  const icon = availPanelCollapsed ? '&#x25B6;' : '&#x25BC;';
+  const chips = availPanelCollapsed ? '' :
+    '<div class="avail-chips">'
     + players.map(p =>
         `<button type="button" class="avail-chip ${sessionAvailablePids.has(String(p.id))?'on':'off'}" onclick="toggleAvailPlayer(${p.id})">${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</button>`
       ).join('')
     + '</div>';
+  panel.innerHTML =
+    `<div class="avail-panel-header" onclick="toggleAvailCollapse()">
+       <span>&#xC624;&#xB298; &#xCC38;&#xC804; &#xBA64;&#xBC84; (&#xBCA4;&#xCE58;&#xC5D0;&#xB9CC; &#xBC18;&#xC601;)</span>
+       <span class="avail-collapse-icon">${icon}</span>
+     </div>`
+    + chips;
 }
 function updateAvailBtn() {
   const btn = document.getElementById('btnAvail');

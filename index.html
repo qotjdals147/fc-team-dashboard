@@ -58,6 +58,7 @@
   <div class="present-bar">
     <div class="formation-view-label" id="formationViewLabel"></div>
     <button id="btnPresent" class="btn-present admin-only" onclick="togglePresentMode()" title="프레젠테이션 모드">&#x1F5A5;&#xFE0F; 발표</button>
+    <button id="btnPresentPanel" class="btn-pp-toggle admin-only" onclick="togglePresentPanel()" title="&#xD328;&#xB110; &#xC5F4;&#xAE30;/&#xB2EB;&#xAE30;">&#x2699;&#xFE0F;</button>
   </div>
   <div class="formation-toolbar admin-only">
     <label>포메이션</label>
@@ -100,6 +101,39 @@
     <div class="bench-title admin-only">탭 &#x2192; 자동 배치 &#xB7; 드래그 &#x2192; 원하는 자리 &#xB7; &#x1F504; &#x2192; 출전 교체</div>
     <div class="bench-list" id="benchList"></div>
   </div>
+<div id="presentPanel" class="present-panel">
+  <div class="pp-block">
+    <div class="pp-block-title">&#x1F4FA; &#xD654;&#xBA74; &#xD06C;&#xAE30; &#xC870;&#xC808;</div>
+    <div class="pp-scale-row">
+      <span class="pp-label">&#xD1A0;&#xD070; &#xD06C;&#xAE30;</span>
+      <button class="pp-btn" onclick="stepPresentScale('token',-1)">&#x2212;</button>
+      <span class="pp-val" id="psToken">100%</span>
+      <button class="pp-btn" onclick="stepPresentScale('token',1)">+</button>
+    </div>
+    <div class="pp-scale-row">
+      <span class="pp-label">&#xBC24;&#xCE58; &#xAE00;&#xC528;</span>
+      <button class="pp-btn" onclick="stepPresentScale('bench',-1)">&#x2212;</button>
+      <span class="pp-val" id="psBench">100%</span>
+      <button class="pp-btn" onclick="stepPresentScale('bench',1)">+</button>
+    </div>
+    <div class="pp-scale-row">
+      <span class="pp-label">&#xBA64;&#xBC84; &#xAE00;&#xC528;</span>
+      <button class="pp-btn" onclick="stepPresentScale('avail',-1)">&#x2212;</button>
+      <span class="pp-val" id="psAvail">100%</span>
+      <button class="pp-btn" onclick="stepPresentScale('avail',1)">+</button>
+    </div>
+    <div class="pp-scale-row">
+      <span class="pp-label">&#xCFFC;&#xD130; &#xBC84;&#xD2BC;</span>
+      <button class="pp-btn" onclick="stepPresentScale('quarter',-1)">&#x2212;</button>
+      <span class="pp-val" id="psQuarter">100%</span>
+      <button class="pp-btn" onclick="stepPresentScale('quarter',1)">+</button>
+    </div>
+  </div>
+  <div class="pp-block">
+    <div class="pp-block-title">&#x26BD; &#xCFFC;&#xD130; &#xCD9C;&#xC804; &#xD604;&#xD669;</div>
+    <div id="ppDashboard" class="pp-dashboard"></div>
+  </div>
+</div>
 </div>
 <div id="tab-stats" class="tab-panel">
   <div class="stats-subnav">

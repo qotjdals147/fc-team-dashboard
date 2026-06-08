@@ -93,9 +93,9 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .avail-btn.active { background:#2563eb; color:#fff; border-color:transparent; box-shadow:0 0 0 2px rgba(37,99,235,.3); }
 .avail-panel { padding:8px 12px 6px; background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0; }
 .avail-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
-.avail-chip { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; border:1px solid var(--border2); font-size:11px; cursor:pointer; transition:all .15s; }
-.avail-chip.on  { background:var(--accent); color:#fff; border-color:transparent; }
-.avail-chip.off { background:var(--bg); color:var(--text3); opacity:0.55; }
+.avail-chip { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; border:1px solid var(--border2); font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; }
+.avail-chip.on  { background:#2563eb; color:#fff; border-color:transparent; }
+.avail-chip.off { background:var(--bg); color:var(--text); border-color:var(--border2); opacity:0.75; }
 /* 통계 메달 */
 .stat-medal { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-size:9px; font-weight:900; margin-right:4px; flex-shrink:0; vertical-align:middle; }
 .stat-medal-1 { background:linear-gradient(135deg,#ffd700,#e6a800); color:#7a4e00; box-shadow:0 1px 4px rgba(255,190,0,.5); }
@@ -443,6 +443,67 @@ body.presentation-mode .formation-view-label { display:none !important; }
 /* 프레젠테이션 중 오늘 멤버 버튼/패널은 숨김 (발표 전 설정 후 진입) */
 body.presentation-mode .avail-btn,
 body.presentation-mode #availPanel { display:none !important; }
+
+/* ── 프레젠테이션 우측 패널 ── */
+#presentPanel { display:none; }
+
+body.presentation-mode #presentPanel {
+  display:flex; flex-direction:column; gap:10px;
+  position:absolute; top:0; right:0;
+  width:200px; height:100%;
+  background:rgba(10,12,20,0.88);
+  backdrop-filter:blur(10px);
+  border-left:1px solid rgba(255,255,255,.12);
+  z-index:9050;
+  overflow-y:auto;
+  padding:12px 10px;
+  box-sizing:border-box;
+}
+.pp-block { display:flex; flex-direction:column; gap:6px; }
+.pp-block-title { font-size:11px; font-weight:700; color:rgba(255,255,255,.55); text-transform:uppercase; letter-spacing:.5px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.1); }
+.pp-scale-row { display:flex; align-items:center; gap:4px; }
+.pp-label { flex:1; font-size:11px; color:rgba(255,255,255,.8); }
+.pp-btn { width:24px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; flex-shrink:0; }
+.pp-btn:hover { background:rgba(255,255,255,.2); }
+.pp-val { min-width:36px; text-align:center; font-size:11px; font-weight:700; color:#60a5fa; }
+.pp-dashboard { display:flex; flex-direction:column; gap:4px; }
+.pp-row { display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:11px; }
+.pp-name { color:rgba(255,255,255,.85); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:75px; }
+.pp-badges { display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end; }
+.pp-q-badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:10px; }
+.pp-q-badge.on  { background:#2563eb; color:#fff; }
+.pp-q-badge.off { background:rgba(255,255,255,.1); color:rgba(255,255,255,.3); }
+.pp-q-all { font-size:9px; font-weight:700; padding:1px 7px; border-radius:10px; background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.pp-empty { font-size:11px; color:rgba(255,255,255,.35); text-align:center; padding:8px 0; }
+
+/* 모바일: 하단 드로어 */
+@media (max-width:600px) {
+  body.presentation-mode #presentPanel {
+    position:fixed; top:auto; bottom:0; left:0; right:0;
+    width:100%; height:auto; max-height:55vh;
+    flex-direction:row; flex-wrap:wrap;
+    border-left:none; border-top:1px solid rgba(255,255,255,.15);
+    transform:translateY(100%); transition:transform .3s;
+  }
+  body.presentation-mode #presentPanel.mobile-open {
+    transform:translateY(0);
+  }
+  body.presentation-mode .pp-block { flex:1; min-width:150px; }
+}
+
+/* 모바일 패널 토글 버튼 - 프레젠테이션 모드에서만 보임 */
+.btn-pp-toggle { display:none; padding:3px 8px; border:1px solid rgba(255,255,255,.25); border-radius:8px; background:rgba(255,255,255,.1); color:#fff; font-size:14px; cursor:pointer; transition:background .15s; }
+body.presentation-mode .btn-pp-toggle { display:inline-flex; align-items:center; }
+@media (min-width:601px) { body.presentation-mode .btn-pp-toggle { display:none; } }
+
+/* avail-panel 접기/펴기 */
+.avail-panel-header { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+.avail-collapse-icon { font-size:10px; color:var(--text3); margin-left:6px; }
+
+/* 스케일 CSS 변수 적용 (프레젠테이션 모드) */
+body.presentation-mode .bench-player { font-size:calc(12px * var(--ps-bench, 1)) !important; }
+body.presentation-mode .avail-chip   { font-size:calc(11px * var(--ps-avail, 1)) !important; padding:calc(3px * var(--ps-avail,1)) calc(9px * var(--ps-avail,1)); }
+body.presentation-mode .quarter-btn  { font-size:calc(12px * var(--ps-quarter, 1)) !important; padding:calc(3px * var(--ps-quarter,1)) calc(11px * var(--ps-quarter,1)); }
 
 /* 필드 영역: 캔버스가 가운데 오도록 */
 body.presentation-mode .field-wrap {

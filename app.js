@@ -3420,12 +3420,12 @@ function setTrMonthFilter(ym) {
   trFilterYearMonth = ym || currentYearMonth();
   renderTreasurer();
 }
-function isGkPlayer(p) {
-  return !!(p.positions && p.positions.includes('GK'));
+function isGkOnlyPlayer(p) {
+  return !!(p.positions && p.positions.length === 1 && p.positions[0] === 'GK');
 }
 function isPlayerExempt(pid, ym) {
   const p = players.find(pl => pl.id == pid);
-  if (p && isGkPlayer(p)) return true;
+  if (p && isGkOnlyPlayer(p)) return true;
   return dueExemptions.some(ex => ex.pid == pid && ym >= ex.fromMonth && ym <= ex.toMonth);
 }
 function getPaymentStatus(pid, ym) {
@@ -3932,11 +3932,11 @@ function renderExemptionList() {
       <span>${name} · ${formatYearMonthDisplay(ex.fromMonth)} ~ ${formatYearMonthDisplay(ex.toMonth)}</span>
       <button class="tr-btn-sm danger" onclick="deleteExemption(${ex.id})">\uC0AD\uC81C</button>
     </div>`;
-  }).join('') : '<div class="tr-empty">\uB4F1\uB85D\uB41C \uBA74\uC81C \uAE30\uAC04\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. (GK\uB294 \uC790\uB3D9 \uBA74\uC81C)</div>';
+  }).join('') : '<div class="tr-empty">\uB4F1\uB85D\uB41C \uBA74\uC81C \uAE30\uAC04\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. (GK \uB2E8\uC77C \uD3EC\uC9C0\uC158\uB9CC \uC790\uB3D9 \uBA74\uC81C)</div>';
   const sel = document.getElementById('exemptPid');
   if (sel) {
     sel.innerHTML = '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
-      players.filter(p => !p.isMercenary && !isGkPlayer(p)).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
+      players.filter(p => !p.isMercenary && !isGkOnlyPlayer(p)).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
         .map(p => `<option value="${p.id}">${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`).join('');
   }
 }

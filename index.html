@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=72">
+<link rel="stylesheet" href="style.css?v=73">
 
 
 
@@ -2022,74 +2022,74 @@
 <div class="modal-bg" id="scheduleModal">
   <div class="modal">
     <div class="modal-section-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <h3 style="margin:0">寃쎄린 ?쇱젙</h3>
-      <button type="button" class="tr-btn-sm admin-only" id="scheduleAddBtn" onclick="openScheduleEditModal()">+ 異붽?</button>
+      <h3 style="margin:0">&#xACBD;&#xAE30; &#xC77C;&#xC815;</h3>
+      <button type="button" class="tr-btn-sm admin-only" id="scheduleAddBtn" onclick="openScheduleEditModal()">+ &#xCD94;&#xAC00;</button>
     </div>
     <div id="scheduleModalBody"></div>
-    <div class="modal-actions"><button class="btn-cancel" onclick="closeScheduleModal()">?リ린</button></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeScheduleModal()">&#xB2EB;&#xAE30;</button></div>
   </div>
 </div>
 <div class="modal-bg" id="scheduleEditModal">
   <div class="modal modal-sm">
-    <h3>寃쎄린 ?쇱젙</h3>
-    <div class="form-field"><label>?좎쭨</label><input type="date" id="schedDate"></div>
-    <div class="form-field"><label>?쒓컙 (?좏깮)</label><input type="time" id="schedTime"></div>
-    <div class="form-field"><label>?곷? ?</label><input type="text" id="schedOpponent" placeholder="?? FC ?쒖슱" autocomplete="off"></div>
-    <div class="form-field"><label>硫붾え (?좏깮)</label><input type="text" id="schedNote" placeholder="?? ??寃쎄린" autocomplete="off"></div>
+    <h3>&#xACBD;&#xAE30; &#xC77C;&#xC815;</h3>
+    <div class="form-field"><label>&#xB0A0;&#xC9DC;</label><input type="date" id="schedDate"></div>
+    <div class="form-field"><label>&#xC2DC;&#xAC04; (&#xC120;&#xD0DD;)</label><input type="time" id="schedTime"></div>
+    <div class="form-field"><label>&#xC0C1;&#xB300; &#xD300;</label><input type="text" id="schedOpponent" placeholder="&#xC608;: FC &#xC11C;&#xC6B8;" autocomplete="off"></div>
+    <div class="form-field"><label>&#xBA54;&#xBAA8; (&#xC120;&#xD0DD;)</label><input type="text" id="schedNote" placeholder="&#xC608;: &#xD648; &#xACBD;&#xAE30;" autocomplete="off"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeScheduleEditModal()">痍⑥냼</button>
-      <button class="btn-save-modal" onclick="saveScheduleItem()">???/button>
+      <button class="btn-cancel" onclick="closeScheduleEditModal()">&#xCDE8;&#xC18C;</button>
+      <button class="btn-save-modal" onclick="saveScheduleItem()">&#xC800;&#xC7A5;</button>
     </div>
   </div>
 </div>
 <div class="modal-bg" id="noticeModal">
   <div class="modal">
     <div class="modal-section-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <h3 style="margin:0">怨듭??ы빆</h3>
-      <button type="button" class="tr-btn-sm admin-only" id="noticeAddBtn" onclick="openNoticeEditModal()">+ 異붽?</button>
+      <h3 style="margin:0">&#xACF5;&#xC9C0;&#xC0AC;&#xD56D;</h3>
+      <button type="button" class="tr-btn-sm admin-only" id="noticeAddBtn" onclick="openNoticeEditModal()">+ &#xCD94;&#xAC00;</button>
     </div>
     <div id="noticeModalBody"></div>
-    <div class="modal-actions"><button class="btn-cancel" onclick="closeNoticeModal()">?リ린</button></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeNoticeModal()">&#xB2EB;&#xAE30;</button></div>
   </div>
 </div>
 <div class="modal-bg" id="noticeEditModal">
   <div class="modal modal-sm">
-    <h3>怨듭??ы빆</h3>
-    <div class="form-field"><label>?쒕ぉ</label><input type="text" id="noticeEditTitle" autocomplete="off"></div>
-    <div class="form-field"><label>?좎쭨</label><input type="date" id="noticeEditDate"></div>
-    <div class="form-field"><label>?댁슜</label><textarea id="noticeEditBody" rows="5" style="width:100%;resize:vertical"></textarea></div>
+    <h3>&#xACF5;&#xC9C0;&#xC0AC;&#xD56D;</h3>
+    <div class="form-field"><label>&#xC81C;&#xBAA9;</label><input type="text" id="noticeEditTitle" autocomplete="off"></div>
+    <div class="form-field"><label>&#xB0A0;&#xC9DC;</label><input type="date" id="noticeEditDate"></div>
+    <div class="form-field"><label>&#xB0B4;&#xC6A9;</label><textarea id="noticeEditBody" rows="5" style="width:100%;resize:vertical"></textarea></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeNoticeEditModal()">痍⑥냼</button>
-      <button class="btn-save-modal" onclick="saveNoticeItem()">???/button>
+      <button class="btn-cancel" onclick="closeNoticeEditModal()">&#xCDE8;&#xC18C;</button>
+      <button class="btn-save-modal" onclick="saveNoticeItem()">&#xC800;&#xC7A5;</button>
     </div>
   </div>
 </div>
 <div class="modal-bg" id="bulkDuesModal">
   <div class="modal modal-sm">
-    <h3>?쇨큵 ?낃툑</h3>
-    <div class="form-field"><label>湲덉븸 (??</label><input type="number" id="bulkDueAmount" min="0" step="1000" value="50000"></div>
-    <div class="form-field"><label>?좎쭨</label><input type="date" id="bulkDueDate"></div>
+    <h3>&#xC77C;&#xAD04; &#xC785;&#xAE08;</h3>
+    <div class="form-field"><label>&#xAE08;&#xC561; (&#xC6D0;)</label><input type="number" id="bulkDueAmount" min="0" step="1000" value="50000"></div>
+    <div class="form-field"><label>&#xB0A0;&#xC9DC;</label><input type="date" id="bulkDueDate"></div>
     <div class="form-field">
-      <label>誘몃궔 ?좎닔 <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(true)">?꾩껜</button> <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(false)">?댁젣</button></label>
+      <label>&#xBBF8;&#xB0A9; &#xC120;&#xC218; <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(true)">&#xC804;&#xCCB4;</button> <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(false)">&#xD574;&#xC81C;</button></label>
       <div class="bulk-due-list" id="bulkDuesList"></div>
     </div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeBulkDuesModal()">痍⑥냼</button>
-      <button class="btn-save-modal" onclick="saveBulkDues()">???/button>
+      <button class="btn-cancel" onclick="closeBulkDuesModal()">&#xCDE8;&#xC18C;</button>
+      <button class="btn-save-modal" onclick="saveBulkDues()">&#xC800;&#xC7A5;</button>
     </div>
   </div>
 </div>
 <div class="modal-bg" id="exemptionModal">
   <div class="modal modal-sm">
-    <h3>硫댁젣 愿由?/h3>
-    <p style="font-size:12px;color:var(--text2);margin:0 0 8px">GK???먮룞 硫댁젣?낅땲??</p>
+    <h3>&#xBA74;&#xC81C; &#xAD00;&#xB9AC;</h3>
+    <p style="font-size:12px;color:var(--text2);margin:0 0 8px">GK &#xB2E8;&#xC77C; &#xD3EC;&#xC9C0;&#xC158;&#xB9CC; &#xC790;&#xB3D9; &#xBA74;&#xC81C;&#xB429;&#xB2C8;&#xB2E4;.</p>
     <div id="exemptionList"></div>
-    <div class="form-field"><label>?좎닔</label><select id="exemptPid" class="formation-select"><option value="">?좎닔 ?좏깮</option></select></div>
-    <div class="form-field"><label>?쒖옉 ??/label><input type="month" id="exemptFrom"></div>
-    <div class="form-field"><label>醫낅즺 ??/label><input type="month" id="exemptTo"></div>
+    <div class="form-field"><label>&#xC120;&#xC218;</label><select id="exemptPid" class="formation-select"><option value="">&#xC120;&#xC218; &#xC120;&#xD0DD;</option></select></div>
+    <div class="form-field"><label>&#xC2DC;&#xC791; &#xC6D4;</label><input type="month" id="exemptFrom"></div>
+    <div class="form-field"><label>&#xC885;&#xB8CC; &#xC6D4;</label><input type="month" id="exemptTo"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeExemptionModal()">?リ린</button>
-      <button class="btn-save-modal" onclick="saveExemption()">硫댁젣 異붽?</button>
+      <button class="btn-cancel" onclick="closeExemptionModal()">&#xB2EB;&#xAE30;</button>
+      <button class="btn-save-modal" onclick="saveExemption()">&#xBA74;&#xC81C; &#xCD94;&#xAC00;</button>
     </div>
   </div>
 </div>
@@ -3118,7 +3118,7 @@
 
 
 
-<script src="data.js?v=72"></script>
+<script src="data.js?v=73"></script>
 
 
 
@@ -3126,7 +3126,7 @@
 
 
 
-<script src="api.js?v=72"></script>
+<script src="api.js?v=73"></script>
 
 
 
@@ -3134,7 +3134,7 @@
 
 
 
-<script src="app.js?v=72"></script>
+<script src="app.js?v=73"></script>
 
 
 

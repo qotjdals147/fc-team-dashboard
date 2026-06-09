@@ -709,15 +709,15 @@ function migratePlayerPos(p) {
 function applyRemoteData(data) {
   players = (data.players?.length ? data.players : DEFAULT_PLAYERS.map(p => ({...p})))
     .map(p => normalizePlayerOvr(migratePlayerPos({...p})));
-  matches = data.matches || [];
+  matches = normalizeMatchDates(data.matches || []);
   myTeamName = data.meta?.myTeam || '';
   // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
   if (data.meta?.adminPw)     localStorage.setItem('fc_admin_pw',     data.meta.adminPw);
   if (data.meta?.treasurerPw) localStorage.setItem('fc_treasurer_pw', data.meta.treasurerPw);
-  // 총무 데이터
-  dues        = data.dues        || [];
-  expenses    = data.expenses    || [];
-  settlements = data.settlements || [];
+  // 총무 데이터 (시트 Date/ISO → YYYY-MM-DD)
+  dues        = normalizeDuesDates(data.dues || []);
+  expenses    = normalizeExpenseDates(data.expenses || []);
+  settlements = normalizeSettlementDates(data.settlements || []);
   // 슬라이드쇼 URLs
   const rawUrls = data.meta?.teamPhotoUrls;
   if (rawUrls) {
@@ -753,16 +753,17 @@ function applyRemoteData(data) {
   // formationSaves 마이그레이션 (구형식 → q1, 포지션 마이그레이션)
   formationSaves = (data.saves || []).map(sv => {
     const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
+    const normDate = sv.date ? normalizeDate(sv.date) : sv.date;
     if (sv.q1tokens !== undefined) {
-      const migrated = {...sv};
+      const migrated = {...sv, date: normDate};
       for (let q = 1; q <= 4; q++) {
         migrated['q'+q+'tokens'] = (sv['q'+q+'tokens'] || []).map(migrateT);
       }
       return migrated;
     } else {
-      // 구형식 → q1으로 마이그레이션
       return {
         ...sv,
+        date: normDate,
         q1formation: sv.formation || '',
         q1tokens: (sv.tokens || []).map(migrateT),
         q2formation:'', q2tokens:[],
@@ -820,7 +821,7 @@ async function maybeMigrateLocal(data) {
 function loadLocalFallback() {
   const s = localStorage.getItem('fc_players');
   players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr(migratePlayerPos({...p})));
-  matches = JSON.parse(localStorage.getItem('fc_matches') || '[]');
+  matches = normalizeMatchDates(JSON.parse(localStorage.getItem('fc_matches') || '[]'));
   const rawSaves = JSON.parse(localStorage.getItem('fc_saves') || '[]');
   formationSaves = rawSaves.map(sv => {
     const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
@@ -853,9 +854,9 @@ function loadLocalFallback() {
   if (rawPI) photoInterval = Math.max(3, parseInt(rawPI) || 10);
   currentPhotoIdx = 0;
   photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
-  dues        = JSON.parse(localStorage.getItem('fc_dues')        || '[]');
-  expenses    = JSON.parse(localStorage.getItem('fc_expenses')    || '[]');
-  settlements = JSON.parse(localStorage.getItem('fc_settlements') || '[]');
+  dues        = normalizeDuesDates(JSON.parse(localStorage.getItem('fc_dues')        || '[]'));
+  expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]'));
+  settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]'));
   loadFieldState();
 }
 function hasLocalData() {
@@ -2586,7 +2587,7 @@ function confirmSaveFormation(){
   if(!name){alert('이름을 입력해주세요');return;}
   // 현재 쿼터 동기화
   quarterData[activeQuarter]={formation:getFormation(),tokens:JSON.parse(JSON.stringify(fieldTokens))};
-  const save={id:Date.now(),name,date:new Date().toLocaleDateString('ko-KR')};
+  const save={id:Date.now(),name,date:new Date().toISOString().slice(0,10)};
   for(let q=1;q<=4;q++){
     const qd=quarterData[q]||{};
     save['q'+q+'formation']=qd.formation||'';
@@ -2642,7 +2643,7 @@ function renderFormationSaves(){
     return `<div class="fsave-item">
       <div class="fsave-info">
         <div class="fsave-name">${s.name}</div>
-        <div class="fsave-meta">${mainFormation} · ${totalPlayers}명 · ${s.date}${hasMultiQ?' · 4Q':''}</div>
+        <div class="fsave-meta">${mainFormation} · ${totalPlayers}명 · ${formatDateDisplay(s.date)}${hasMultiQ?' · 4Q':''}</div>
       </div>
       <button class="btn-fsave-load" onclick="loadSave(${s.id})">불러오기</button>
       <button class="btn-fsave-del" onclick="deleteSave(${s.id})">✕</button>
@@ -2764,7 +2765,7 @@ function openMatchModal(editId){
   const em=editId?matches.find(m=>m.id===editId):null;
   document.getElementById('matchMyTeam').value=em?.myTeam||myTeamName||'';
   document.getElementById('matchOppTeam').value=em?.oppTeam||'';
-  document.getElementById('matchDate').value=em?.date||new Date().toISOString().slice(0,10);
+  document.getElementById('matchDate').value=normalizeDate(em?.date)||new Date().toISOString().slice(0,10);
   document.getElementById('matchScoreUs').value=em?.scoreUs??0;
   document.getElementById('matchScoreOpp').value=em?.scoreOpp??0;
   matchMom=em?.mom||null;
@@ -2804,7 +2805,7 @@ function saveMatch(){
   if(!matchParticipants.length){alert('출전 선수가 없습니다');return;}
   const myTeam=document.getElementById('matchMyTeam').value.trim()||'우리 FC';
   const oppTeam=document.getElementById('matchOppTeam').value.trim()||'상대 FC';
-  const date=document.getElementById('matchDate').value;
+  const date=normalizeDate(document.getElementById('matchDate').value);
   const scoreUs=parseInt(document.getElementById('matchScoreUs').value)||0;
   const scoreOpp=parseInt(document.getElementById('matchScoreOpp').value)||0;
   const homeAway=null; // 홈/어웨이 미사용 (하위호환용 null 유지)
@@ -2882,7 +2883,7 @@ function renderRecords(){
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
         <span class="match-team">${m.oppTeam}</span>
       </div>
-      <div class="match-meta">${m.date} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}${defBadges}</div>
+      <div class="match-meta">${formatDateDisplay(m.date)} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}${defBadges}</div>
       ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">&#xCD9C;&#xC804;</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
       ${scorerRows?`<div class="match-scorers">${scorerRows}</div>`:''}
       ${wageSection}
@@ -2923,8 +2924,10 @@ function refreshStatsIfVisible() {
 }
 function formatStreakPeriod(s) {
   if (!s.count) return '기록 없음';
-  if (s.from === s.to) return s.from;
-  return `${s.from} ~ ${s.to}`;
+  const from = formatDateDisplay(s.from);
+  const to = formatDateDisplay(s.to);
+  if (from === to) return from;
+  return `${from} ~ ${to}`;
 }
 function renderPersonalStats(filtered) {
   const sortKey = document.getElementById('statsSortKey')?.value || 'total';
@@ -3038,7 +3041,7 @@ function openStatHistory(pid, type) {
   document.getElementById('statHistoryTitle').textContent = `${p?.name || ''} — ${label} 히스토리`;
   document.getElementById('statHistoryList').innerHTML = history.map(h =>
     `<div class="stat-history-row">
-      <span class="stat-history-date">${h.date}</span>
+      <span class="stat-history-date">${formatDateDisplay(h.date)}</span>
       <span class="stat-history-score">${h.scoreUs}:${h.scoreOpp}</span>
       <span class="stat-history-opp">vs ${h.oppTeam || '상대'}</span>
       <span class="stat-history-count">${label} ${h.count}</span>
@@ -3147,7 +3150,8 @@ function computeUnsettledWage(pid) {
   if (players.find(p => p.id === pid)?.isMercenary) return 0;
   const settled = settlements.filter(s => s.pid == pid && s.status === 'done');
   return matches.reduce((sum, m) => {
-    const isSettled = settled.some(s => m.date >= s.startDate && m.date <= s.endDate);
+    const md = normalizeDate(m.date);
+    const isSettled = settled.some(s => md >= normalizeDate(s.startDate) && md <= normalizeDate(s.endDate));
     if (isSettled) return sum;
     const w = computeMatchWages(m);
     return sum + (w[pid]?.total || 0);
@@ -3187,7 +3191,7 @@ function renderTreasurer() {
   const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth()-3, now.getDate()).toISOString().slice(0,10);
   const warnPids = new Set(
     regularPlayers.filter(p => {
-      const lastDate = dues.filter(d => d.pid == p.id && d.type === 'payment').map(d=>d.date).sort().at(-1);
+      const lastDate = dues.filter(d => d.pid == p.id && d.type === 'payment').map(d=>normalizeDate(d.date)).sort().at(-1);
       return !lastDate || lastDate < threeMonthsAgo;
     }).map(p => p.id)
   );
@@ -3244,7 +3248,7 @@ function renderTreasurer() {
             const cancelled = ex.status === 'cancelled';
             const statusLabel = ex.settlementId ? '\uB9AC\uC6CC\uB4DC\uC815\uC0B0' : (cancelled ? '\uCDE8\uC18C' : '\uD65C\uC131');
             return `<tr class="${cancelled?'tr-cancelled':''}">
-              <td>${ex.date||''}</td>
+              <td>${formatDateDisplay(ex.date)}</td>
               <td>${ex.category||''}</td>
               <td>${fmtMoney(ex.amount)}</td>
               <td><span class="tr-status-badge ${ex.settlementId?'settled':''} ${cancelled?'cancelled':''}">${statusLabel}</span></td>
@@ -3299,7 +3303,7 @@ function renderDuesList() {
     const typeLabel = d.type === 'refund' ? '\uD658\uBD88' : '\uC785\uAE08';
     const typeClass = d.type === 'refund' ? 'refund' : 'payment';
     return `<div class="tr-due-row">
-      <span class="tr-due-date">${d.date||''}</span>
+      <span class="tr-due-date">${formatDateDisplay(d.date)}</span>
       <span class="tr-due-name">${pName}</span>
       <span class="tr-due-type ${typeClass}">${typeLabel}</span>
       <span class="tr-due-amount">${fmtMoney(d.amount)}</span>
@@ -3322,10 +3326,10 @@ function renderSettlementRows() {
     const total  = active.reduce((sum,s)=>sum+(s.settledAmount||0),0);
     const allCancelled = g.items.every(s=>s.status==='cancelled');
     return `<tr class="${allCancelled?'tr-cancelled':''}">
-      <td>${g.startDate||''} ~ ${g.endDate||''}</td>
+      <td>${formatDateDisplay(g.startDate)} ~ ${formatDateDisplay(g.endDate)}</td>
       <td>${active.length}\uBA85</td>
       <td>${fmtMoney(total)}</td>
-      <td>${g.settledAt||''}</td>
+      <td>${formatDateDisplay(g.settledAt)}</td>
       <td>${allCancelled?'\uCDE8\uC18C':'\uC644\uB8CC'}</td>
       <td>${allCancelled?'':`<button class="tr-btn-sm danger" onclick="cancelSettlement('${key}')">\uCDE8\uC18C</button>`}</td>
     </tr>`;
@@ -3341,7 +3345,7 @@ function openDuesModal(id) {
   document.getElementById('dueModalTitle').textContent = d ? '\uD68C\uBE44 \uC218\uC815' : '\uD68C\uBE44 \uC785\uAE08';
   document.getElementById('duePid').value    = d?.pid    || '';
   document.getElementById('dueAmount').value = d?.amount || '';
-  document.getElementById('dueDate').value   = d?.date   || today;
+  document.getElementById('dueDate').value   = normalizeDate(d?.date) || today;
   document.getElementById('dueNote').value   = d?.note   || '';
   document.getElementById('dueType').value   = d?.type   || 'payment';
 
@@ -3357,7 +3361,7 @@ function closeDuesModal() { document.getElementById('duesModal').classList.remov
 function saveDue() {
   const pid    = parseInt(document.getElementById('duePid').value);
   const amount = parseInt(document.getElementById('dueAmount').value);
-  const date   = document.getElementById('dueDate').value;
+  const date   = normalizeDate(document.getElementById('dueDate').value);
   const note   = document.getElementById('dueNote').value.trim();
   const type   = document.getElementById('dueType').value;
   if (!pid || !amount || !date) { alert('\uC120\uC218 · \uAE08\uC561 · \uB0A0\uC9DC\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
@@ -3385,7 +3389,7 @@ function openExpenseModal(id) {
   const ex = id ? expenses.find(x=>x.id==id) : null;
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('expenseModalTitle').textContent = ex ? '\uC9C0\uCD9C \uC218\uC815' : '\uC9C0\uCD9C \uB4F1\uB85D';
-  document.getElementById('expenseDate').value     = ex?.date     || today;
+  document.getElementById('expenseDate').value     = normalizeDate(ex?.date) || today;
   document.getElementById('expenseAmount').value   = ex?.amount   || '';
   document.getElementById('expenseCategory').value = ex?.category || '';
   document.getElementById('expenseNote').value     = ex?.note     || '';
@@ -3393,7 +3397,7 @@ function openExpenseModal(id) {
 }
 function closeExpenseModal() { document.getElementById('expenseModal').classList.remove('open'); }
 function saveExpense() {
-  const date     = document.getElementById('expenseDate').value;
+  const date     = normalizeDate(document.getElementById('expenseDate').value);
   const amount   = parseInt(document.getElementById('expenseAmount').value);
   const category = document.getElementById('expenseCategory').value.trim();
   const note     = document.getElementById('expenseNote').value.trim();
@@ -3444,7 +3448,7 @@ function previewSettlement() {
   preview.innerHTML = `
     <div class="tr-settlement-preview">
       <div class="tr-preview-header">
-        <span>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC — <strong>${from} ~ ${to}</strong> · \uCD1D <strong>${fmtMoney(totalAmt)}</strong></span>
+        <span>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC — <strong>${formatDateDisplay(from)} ~ ${formatDateDisplay(to)}</strong> · \uCD1D <strong>${fmtMoney(totalAmt)}</strong></span>
         ${alreadySettled ? '<span class="tr-warn-badge">\uC774 \uAE30\uAC04 \uC774\uBBF8 \uC815\uC0B0\uB428</span>' : `<button class="tr-btn-primary" onclick="executeSettlement('${from}','${to}')">\uC804\uCCB4 \uC815\uC0B0 \uC2E4\uD589</button>`}
       </div>
       <table class="tr-table">
@@ -3478,7 +3482,7 @@ function executeSettlement(from, to) {
   if (!settledItems.length) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
 
   const total = settledItems.reduce((s,x)=>s+(x.settledAmount||0),0);
-  const note  = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${from}~${to} (${settledItems.length}\uBA85, \uCD1D ${fmtMoney(total)})`;
+  const note  = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} (${settledItems.length}\uBA85, \uCD1D ${fmtMoney(total)})`;
   const newExpense = { id: Date.now(), date: today, amount: total, category: '\uB9AC\uC6CC\uB4DC\uC815\uC0B0', note, status: 'active', settlementId: today };
 
   settlements.push(...settledItems);

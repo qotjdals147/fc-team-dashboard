@@ -24,6 +24,48 @@ function posClass(p) {
 }
 function posColor(positions) { return POS_BG[positions&&positions[0]] || '#6b6b68'; }
 
+// 날짜: 시트 Date/ISO → YYYY-MM-DD 저장, 화면은 YYYY.MM.DD
+function normalizeDate(val) {
+  if (val == null || val === '') return '';
+  if (val instanceof Date && !isNaN(val)) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(val).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ko = s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+  if (ko) return `${ko[1]}-${String(ko[2]).padStart(2, '0')}-${String(ko[3]).padStart(2, '0')}`;
+  const dot = s.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (dot) return `${dot[1]}-${dot[2]}-${dot[3]}`;
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+function formatDateDisplay(val) {
+  const n = normalizeDate(val);
+  if (!n || n.length < 10) return val ? String(val) : '';
+  const [y, m, d] = n.split('-');
+  return `${y}.${m}.${d}`;
+}
+function normalizeMatchDates(list) {
+  return (list || []).map(m => ({ ...m, date: normalizeDate(m.date) || m.date }));
+}
+function normalizeDuesDates(list) {
+  return (list || []).map(d => ({ ...d, date: normalizeDate(d.date) }));
+}
+function normalizeExpenseDates(list) {
+  return (list || []).map(e => ({ ...e, date: normalizeDate(e.date) }));
+}
+function normalizeSettlementDates(list) {
+  return (list || []).map(s => ({
+    ...s,
+    startDate: normalizeDate(s.startDate),
+    endDate: normalizeDate(s.endDate),
+    settledAt: normalizeDate(s.settledAt),
+  }));
+}
+
 // OVR 가장 높은 포지션 (= 주포지션) 반환
 function primaryPos(p) {
   if (!p || !p.positions || !p.positions.length) return '';
@@ -179,12 +221,12 @@ function matchParticipantPids(m) {
   return pids;
 }
 function getMatchYears(matches) {
-  const years = new Set(matches.map(m => m.date?.slice(0, 4)).filter(Boolean));
+  const years = new Set(matches.map(m => normalizeDate(m.date).slice(0, 4)).filter(Boolean));
   return [...years].sort((a, b) => b - a);
 }
 function filterMatchesByYear(matches, year) {
   if (!year || year === 'ALL') return matches;
-  return matches.filter(m => m.date && m.date.startsWith(String(year)));
+  return matches.filter(m => normalizeDate(m.date).startsWith(String(year)));
 }
 function filterMatchesByVenue(matches, venue) {
   if (!venue || venue === 'all') return matches;
@@ -225,7 +267,7 @@ function computeTeamStats(matches) {
   };
 }
 function computeStreaks(matches) {
-  const sorted = [...matches].filter(m => m.date).sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...matches].filter(m => normalizeDate(m.date)).sort((a, b) => normalizeDate(a.date).localeCompare(normalizeDate(b.date)));
   const best = {
     win: { count: 0, from: null, to: null },
     unbeaten: { count: 0, from: null, to: null },
@@ -239,20 +281,21 @@ function computeStreaks(matches) {
   };
   sorted.forEach(m => {
     const r = matchResult(m);
+    const md = normalizeDate(m.date);
     if (r === 'W') {
-      if (!curWin) winFrom = m.date;
+      if (!curWin) winFrom = md;
       curWin++;
-      setBest('win', curWin, winFrom, m.date);
+      setBest('win', curWin, winFrom, md);
     } else curWin = 0;
     if (r !== 'L') {
-      if (!curUnbeaten) unbeatenFrom = m.date;
+      if (!curUnbeaten) unbeatenFrom = md;
       curUnbeaten++;
-      setBest('unbeaten', curUnbeaten, unbeatenFrom, m.date);
+      setBest('unbeaten', curUnbeaten, unbeatenFrom, md);
     } else curUnbeaten = 0;
     if (r === 'L') {
-      if (!curLose) loseFrom = m.date;
+      if (!curLose) loseFrom = md;
       curLose++;
-      setBest('lose', curLose, loseFrom, m.date);
+      setBest('lose', curLose, loseFrom, md);
     } else curLose = 0;
   });
   return best;
@@ -263,7 +306,7 @@ function getPlayerStatHistory(matches, pid, type) {
     .map(m => {
       const s = m.scorers.find(x => x.pid === pid);
       return {
-        date: m.date, oppTeam: m.oppTeam, scoreUs: m.scoreUs, scoreOpp: m.scoreOpp,
+        date: normalizeDate(m.date), oppTeam: m.oppTeam, scoreUs: m.scoreUs, scoreOpp: m.scoreOpp,
         count: type === 'goals' ? (s.goals || 0) : (s.assists || 0),
       };
     })

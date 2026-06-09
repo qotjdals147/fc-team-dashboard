@@ -719,14 +719,19 @@ body.presentation-mode #presentQuarterBtns .quarter-btn {
    총무 페이지 스타일
    ════════════════════════════════════════ */
 
-/* 총무 탭 전체 래퍼 */
+/* 총무 탭 전체 래퍼 (다른 탭 stats-scroll·records-wrap 과 동일 스크롤) */
 .tr-page {
-  padding: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  padding: 16px 12px 24px;
   max-width: 760px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 섹션 카드 */

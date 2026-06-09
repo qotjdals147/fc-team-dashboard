@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=67">
+<link rel="stylesheet" href="style.css?v=70">
 
 
 
@@ -2100,8 +2100,15 @@
 <!-- ── 회비 입금 모달 ── -->
 <div class="modal-bg" id="duesModal">
   <div class="modal modal-sm">
-    <h3 id="dueModalTitle">회비 입금</h3>
+    <h3 id="dueModalTitle">입금 등록</h3>
     <div class="form-field">
+      <label>유형</label>
+      <select id="dueType" class="formation-select" onchange="updateDueFormMode()">
+        <option value="payment">회비 입금</option>
+        <option value="other">기타</option>
+      </select>
+    </div>
+    <div class="form-field" id="duePlayerField">
       <label>선수</label>
       <select id="duePid" class="formation-select"><option value="">선수 선택</option></select>
     </div>
@@ -2114,14 +2121,7 @@
       <input type="date" id="dueDate">
     </div>
     <div class="form-field">
-      <label>유형</label>
-      <select id="dueType" class="formation-select">
-        <option value="payment">입금</option>
-        <option value="refund">환불</option>
-      </select>
-    </div>
-    <div class="form-field">
-      <label>메모 (선택)</label>
+      <label id="dueNoteLabel">메모 (선택)</label>
       <input type="text" id="dueNote" placeholder="예: 3월 회비" autocomplete="off">
     </div>
     <div class="modal-actions">
@@ -2148,8 +2148,8 @@
       <input type="text" id="expenseCategory" placeholder="예: 회식, 용품 구매" autocomplete="off">
     </div>
     <div class="form-field">
-      <label>메모 (선택)</label>
-      <input type="text" id="expenseNote" placeholder="추가 설명" autocomplete="off">
+      <label>메모 (필수)</label>
+      <input type="text" id="expenseNote" placeholder="예: 영수증 내용, 참석 인원 (증빙)" autocomplete="off">
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeExpenseModal()">취소</button>
@@ -3190,7 +3190,7 @@
 
 
 
-<script src="data.js?v=67"></script>
+<script src="data.js?v=70"></script>
 
 
 
@@ -3198,7 +3198,7 @@
 
 
 
-<script src="api.js?v=67"></script>
+<script src="api.js?v=70"></script>
 
 
 
@@ -3206,7 +3206,7 @@
 
 
 
-<script src="app.js?v=67"></script>
+<script src="app.js?v=70"></script>
 
 
 

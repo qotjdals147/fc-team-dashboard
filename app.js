@@ -716,8 +716,8 @@ function applyRemoteData(data) {
   if (data.meta?.treasurerPw) localStorage.setItem('fc_treasurer_pw', data.meta.treasurerPw);
   // 총무 데이터 (시트 Date/ISO → YYYY-MM-DD)
   dues        = normalizeDuesDates(data.dues || []);
-  expenses    = normalizeExpenseDates(data.expenses || []);
-  settlements = normalizeSettlementDates(data.settlements || []);
+  expenses    = normalizeExpenseDates(data.expenses || []).filter(e => e.status !== 'cancelled');
+  settlements = normalizeSettlementDates(data.settlements || []).filter(s => s.status !== 'cancelled');
   // 슬라이드쇼 URLs
   const rawUrls = data.meta?.teamPhotoUrls;
   if (rawUrls) {
@@ -855,8 +855,8 @@ function loadLocalFallback() {
   currentPhotoIdx = 0;
   photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
   dues        = normalizeDuesDates(JSON.parse(localStorage.getItem('fc_dues')        || '[]'));
-  expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]'));
-  settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]'));
+  expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]')).filter(e => e.status !== 'cancelled');
+  settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]')).filter(s => s.status !== 'cancelled');
   loadFieldState();
 }
 function hasLocalData() {
@@ -3098,7 +3098,7 @@ function isAnyModalOpen() {
 }
 
 function refreshCurrentTab() {
-  const tabIds = ['home','roster','formation','records','stats'];
+  const tabIds = ['home','roster','formation','records','stats','treasurer'];
   for (const t of tabIds) {
     if (!document.getElementById('tab-' + t)?.classList.contains('active')) continue;
     if (t === 'home') { renderHome(); }
@@ -3140,17 +3140,46 @@ function startPolling() {
 // ── 총무 페이지 ──
 // ════════════════════════════════════════════════════════
 
+const DUE_TYPE_PAYMENT = 'payment'; // 유형: 회비 입금
+const DUE_TYPE_OTHER   = 'other';   // 유형: 기타 입금
+
+function dueTargetLabel(pid) {
+  const p = players.find(pl => pl.id == pid);
+  return p ? (p.jersey != null ? '#' + p.jersey + ' ' : '') + p.name : ('\uC120\uC218#' + pid);
+}
+
+function dueRecordLabel(d) {
+  if (d.type === DUE_TYPE_OTHER || d.pid == 0) return '\uAE30\uD0C0';
+  return dueTargetLabel(d.pid);
+}
+
+function settlementGroupLabel(items) {
+  const active = items.filter(s => s.status === 'done');
+  if (!active.length) return '-';
+  if (active.length === 1) return '1\uBA85 \u00B7 ' + dueTargetLabel(active[0].pid);
+  const names = active.slice(0, 3).map(s => {
+    const p = players.find(pl => pl.id == s.pid);
+    return p ? p.name : ('#' + s.pid);
+  });
+  const suffix = active.length > 3 ? ' \uC678 ' + (active.length - 3) + '\uBA85' : '';
+  return active.length + '\uBA85 \u00B7 ' + names.join(', ') + suffix;
+}
+
 // persist 함수
 async function persistDues()        { await apiSavePartial({ dues });        localStorage.setItem('fc_dues',        JSON.stringify(dues));        }
 async function persistExpenses()    { await apiSavePartial({ expenses });    localStorage.setItem('fc_expenses',    JSON.stringify(expenses));    }
 async function persistSettlements() { await apiSavePartial({ settlements }); localStorage.setItem('fc_settlements', JSON.stringify(settlements)); }
 
-// 미정산 리워드 계산 (정산 완료된 기간 제외)
-function computeUnsettledWage(pid) {
+// 미정산 리워드 계산 (정산 완료된 기간 제외, from/to 지정 시 해당 기간 경기만)
+function computeUnsettledWage(pid, from, to) {
   if (players.find(p => p.id === pid)?.isMercenary) return 0;
   const settled = settlements.filter(s => s.pid == pid && s.status === 'done');
+  const fromD = from ? normalizeDate(from) : null;
+  const toD   = to   ? normalizeDate(to)   : null;
   return matches.reduce((sum, m) => {
     const md = normalizeDate(m.date);
+    if (fromD && md < fromD) return sum;
+    if (toD && md > toD) return sum;
     const isSettled = settled.some(s => md >= normalizeDate(s.startDate) && md <= normalizeDate(s.endDate));
     if (isSettled) return sum;
     const w = computeMatchWages(m);
@@ -3167,10 +3196,8 @@ function renderTreasurer() {
   if (!wrap) return;
 
   // 요약 계산
-  const totalDues     = dues.filter(d => d.type === 'payment').reduce((s,d) => s+(d.amount||0), 0);
-  const totalRefunds  = dues.filter(d => d.type === 'refund' ).reduce((s,d) => s+(d.amount||0), 0);
-  const totalIncome   = totalDues - totalRefunds;
-  const totalExpense  = expenses.filter(e => e.status !== 'cancelled').reduce((s,e) => s+(e.amount||0), 0);
+  const totalIncome   = dues.filter(d => d.type !== 'refund').reduce((s, d) => s + (d.amount || 0), 0);
+  const totalExpense  = expenses.filter(e => e.status !== 'cancelled').reduce((s, e) => s + (e.amount || 0), 0);
   const balance       = totalIncome - totalExpense;
   const budgetLow     = Math.round(balance * 0.2);
   const budgetHigh    = Math.round(balance * 0.3);
@@ -3178,10 +3205,10 @@ function renderTreasurer() {
   // 선수별 회비 요약
   const duesByPid = {};
   dues.forEach(d => {
-    if (!d.pid) return;
-    if (!duesByPid[d.pid]) duesByPid[d.pid] = { count:0, total:0 };
-    if (d.type === 'payment') { duesByPid[d.pid].count++; duesByPid[d.pid].total += (d.amount||0); }
-    else { duesByPid[d.pid].total -= (d.amount||0); }
+    if (d.type !== DUE_TYPE_PAYMENT || !d.pid || d.type === 'refund') return;
+    if (!duesByPid[d.pid]) duesByPid[d.pid] = { count: 0, total: 0 };
+    duesByPid[d.pid].count++;
+    duesByPid[d.pid].total += (d.amount || 0);
   });
 
   const regularPlayers = players.filter(p => !p.isMercenary);
@@ -3191,18 +3218,13 @@ function renderTreasurer() {
   const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth()-3, now.getDate()).toISOString().slice(0,10);
   const warnPids = new Set(
     regularPlayers.filter(p => {
-      const lastDate = dues.filter(d => d.pid == p.id && d.type === 'payment').map(d=>normalizeDate(d.date)).sort().at(-1);
+      const lastDate = dues.filter(d => d.pid == p.id && d.type === DUE_TYPE_PAYMENT).map(d => normalizeDate(d.date)).sort().at(-1);
       return !lastDate || lastDate < threeMonthsAgo;
     }).map(p => p.id)
   );
 
   wrap.innerHTML = `
 <div class="tr-page">
-
-  <div class="tr-quick-actions">
-    <button class="tr-btn-add" onclick="openDuesModal()">\uFF0B \uD68C\uBE44 \uC785\uAE08</button>
-    <button class="tr-btn-add" onclick="openExpenseModal()">\uFF0B \uC9C0\uCD9C \uB4F1\uB85D</button>
-  </div>
 
   <!-- ① 요약 대시보드 -->
   <div class="tr-section">
@@ -3234,7 +3256,7 @@ function renderTreasurer() {
       </table>
     </div>
     <div class="tr-subsection-title">\uC804\uCCB4 \uC785\uAE08 \uAE30\uB85D</div>
-    <div class="tr-dues-list" id="trDuesList">
+    <div class="tr-scroll-box" id="trDuesList">
       ${renderDuesList()}
     </div>
   </div>
@@ -3247,19 +3269,20 @@ function renderTreasurer() {
     </div>
     <div class="tr-table-wrap">
       <table class="tr-table">
-        <thead><tr><th>\uB0A0\uC9DC</th><th>\uC0AC\uC6A9\uCC98</th><th>\uAE08\uC561</th><th>\uC0C1\uD0DC</th><th></th></tr></thead>
+        <thead><tr><th>\uB0A0\uC9DC</th><th>\uC0AC\uC6A9\uCC98</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th>\uC720\uD615</th><th></th></tr></thead>
         <tbody>
-          ${expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ex => {
-            const cancelled = ex.status === 'cancelled';
-            const statusLabel = ex.settlementId ? '\uB9AC\uC6CC\uB4DC\uC815\uC0B0' : (cancelled ? '\uCDE8\uC18C' : '\uD65C\uC131');
-            return `<tr class="${cancelled?'tr-cancelled':''}">
+          ${expenses.filter(e => e.status !== 'cancelled').slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ex => {
+            const isSettle = !!ex.settlementId;
+            const typeLabel = isSettle ? '\uB9AC\uC6CC\uB4DC\uC815\uC0B0' : '\uC9C0\uCD9C';
+            return `<tr>
               <td>${formatDateDisplay(ex.date)}</td>
               <td>${ex.category||''}</td>
               <td>${fmtMoney(ex.amount)}</td>
-              <td><span class="tr-status-badge ${ex.settlementId?'settled':''} ${cancelled?'cancelled':''}">${statusLabel}</span></td>
-              <td>${cancelled||ex.settlementId?'':`<button class="tr-btn-sm" onclick="deleteExpense('${ex.id}')">\uC0AD\uC81C</button>`}</td>
+              <td class="tr-memo-cell">${ex.note || '-'}</td>
+              <td><span class="tr-status-badge ${isSettle?'settled':''}">${typeLabel}</span></td>
+              <td>${isSettle?'':`<button class="tr-btn-sm" onclick="deleteExpense('${ex.id}')">\uC0AD\uC81C</button>`}</td>
             </tr>`;
-          }).join('') || '<tr><td colspan="5" class="tr-empty">\uC9C0\uCD9C \uAE30\uB85D \uC5C6\uC74C</td></tr>'}
+          }).join('') || '<tr><td colspan="6" class="tr-empty">\uC9C0\uCD9C \uAE30\uB85D \uC5C6\uC74C</td></tr>'}
         </tbody>
       </table>
     </div>
@@ -3279,13 +3302,15 @@ function renderTreasurer() {
     </div>
     <div id="trSettlementPreview"></div>
     <div class="tr-subsection-title">\uC815\uC0B0 \uAE30\uB85D</div>
-    <div class="tr-table-wrap">
-      <table class="tr-table">
-        <thead><tr><th>\uAE30\uAC04</th><th>\uB300\uC0C1 \uC778\uC6D0</th><th>\uCD1D\uC561</th><th>\uC2E4\uD589\uC77C</th><th>\uC0C1\uD0DC</th><th></th></tr></thead>
-        <tbody>
-          ${renderSettlementRows()}
-        </tbody>
-      </table>
+    <div class="tr-scroll-box tr-settlement-history">
+      <div class="tr-table-wrap">
+        <table class="tr-table">
+          <thead><tr><th>\uAE30\uAC04</th><th>\uB300\uC0C1</th><th>\uCD1D\uC561</th><th>\uC2E4\uD589\uC77C</th><th></th></tr></thead>
+          <tbody>
+            ${renderSettlementRows()}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -3301,80 +3326,107 @@ function renderTreasurer() {
 }
 
 function renderDuesList() {
-  if (!dues.length) return '<div class="tr-empty">\uC785\uAE08 \uAE30\uB85D \uC5C6\uC74C</div>';
-  return dues.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(d => {
-    const p = players.find(pl => pl.id == d.pid);
-    const pName = p ? (p.jersey!=null?'#'+p.jersey+' ':'')+p.name : ('\uC120\uC218#'+d.pid);
-    const typeLabel = d.type === 'refund' ? '\uD658\uBD88' : '\uC785\uAE08';
-    const typeClass = d.type === 'refund' ? 'refund' : 'payment';
-    return `<div class="tr-due-row">
-      <span class="tr-due-date">${formatDateDisplay(d.date)}</span>
-      <span class="tr-due-name">${pName}</span>
-      <span class="tr-due-type ${typeClass}">${typeLabel}</span>
-      <span class="tr-due-amount">${fmtMoney(d.amount)}</span>
-      ${d.note?`<span class="tr-due-note">${d.note}</span>`:''}
-      <button class="tr-btn-sm" onclick="deleteDue('${d.id}')">\uC0AD\uC81C</button>
-    </div>`;
-  }).join('');
+  const rows = dues.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!rows.length) return '<div class="tr-empty">\uC785\uAE08 \uAE30\uB85D \uC5C6\uC74C</div>';
+  return `<div class="tr-table-wrap">
+    <table class="tr-table">
+      <thead><tr><th>\uB0A0\uC9DC</th><th>\uB300\uC0C1</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th></th></tr></thead>
+      <tbody>
+        ${rows.map(d => `<tr>
+          <td>${formatDateDisplay(d.date)}</td>
+          <td>${dueRecordLabel(d)}</td>
+          <td>${fmtMoney(d.amount)}</td>
+          <td class="tr-memo-cell">${d.note || '-'}</td>
+          <td><button class="tr-btn-sm" onclick="deleteDue('${d.id}')">\uC0AD\uC81C</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function renderSettlementRows() {
-  if (!settlements.length) return '<tr><td colspan="6" class="tr-empty">\uC815\uC0B0 \uAE30\uB85D \uC5C6\uC74C</td></tr>';
+  const activeSettlements = settlements.filter(s => s.status === 'done');
+  if (!activeSettlements.length) return '<tr><td colspan="5" class="tr-empty">\uC815\uC0B0 \uAE30\uB85D \uC5C6\uC74C</td></tr>';
   const groups = {};
-  settlements.forEach(s => {
-    const key = s.startDate+'~'+s.endDate+'|'+s.settledAt;
-    if (!groups[key]) groups[key] = { startDate:s.startDate, endDate:s.endDate, settledAt:s.settledAt, items:[] };
+  activeSettlements.forEach(s => {
+    const key = s.groupId ? String(s.groupId) : (s.startDate + '~' + s.endDate + '|' + s.settledAt);
+    if (!groups[key]) groups[key] = { startDate: s.startDate, endDate: s.endDate, settledAt: s.settledAt, groupId: s.groupId, items: [] };
     groups[key].items.push(s);
   });
-  return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([key, g]) => {
-    const active = g.items.filter(s=>s.status==='done');
-    const total  = active.reduce((sum,s)=>sum+(s.settledAmount||0),0);
-    const allCancelled = g.items.every(s=>s.status==='cancelled');
-    return `<tr class="${allCancelled?'tr-cancelled':''}">
+  return Object.entries(groups).sort((a, b) => (b[1].settledAt || '').localeCompare(a[1].settledAt || '')).map(([key, g]) => {
+    const total = g.items.reduce((sum, s) => sum + (s.settledAmount || 0), 0);
+    const cancelArg = g.groupId ? String(g.groupId) : key;
+    return `<tr>
       <td>${formatDateDisplay(g.startDate)} ~ ${formatDateDisplay(g.endDate)}</td>
-      <td>${active.length}\uBA85</td>
+      <td>${settlementGroupLabel(g.items)}</td>
       <td>${fmtMoney(total)}</td>
       <td>${formatDateDisplay(g.settledAt)}</td>
-      <td>${allCancelled?'\uCDE8\uC18C':'\uC644\uB8CC'}</td>
-      <td>${allCancelled?'':`<button class="tr-btn-sm danger" onclick="cancelSettlement('${key}')">\uCDE8\uC18C</button>`}</td>
+      <td><button class="tr-btn-sm danger" onclick="cancelSettlement('${cancelArg}')">\uCDE8\uC18C</button></td>
     </tr>`;
   }).join('');
 }
 
 // ── 회비 모달 ──
 let editingDueId = null;
+
+function updateDueFormMode() {
+  const type = document.getElementById('dueType')?.value || DUE_TYPE_PAYMENT;
+  const isOther = type === DUE_TYPE_OTHER;
+  const playerWrap = document.getElementById('duePlayerField');
+  const memoLabel = document.getElementById('dueNoteLabel');
+  const memoInput = document.getElementById('dueNote');
+  if (playerWrap) playerWrap.style.display = isOther ? 'none' : '';
+  if (memoLabel) memoLabel.textContent = isOther ? '\uBA54\uBAA8 (\uD544\uC218)' : '\uBA54\uBAA8 (\uC120\uD0DD)';
+  if (memoInput) memoInput.placeholder = isOther
+    ? '\uC608: \uD6C4\uC6D0\uAE08, \uC774\uC804 \uD68C\uBE44 \uC794\uC561 (\uC99D\uBE59 \uB0B4\uC6A9)'
+    : '\uC608: 3\uC6D4 \uD68C\uBE44';
+}
+
 function openDuesModal(id) {
   editingDueId = id || null;
-  const d = id ? dues.find(x=>x.id==id) : null;
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('dueModalTitle').textContent = d ? '\uD68C\uBE44 \uC218\uC815' : '\uD68C\uBE44 \uC785\uAE08';
-  document.getElementById('duePid').value    = d?.pid    || '';
+  const d = id ? dues.find(x => x.id == id) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const dueType = d?.type === DUE_TYPE_OTHER || d?.pid == 0 ? DUE_TYPE_OTHER : DUE_TYPE_PAYMENT;
+  document.getElementById('dueModalTitle').textContent = d ? '\uC785\uAE08 \uC218\uC815' : '\uC785\uAE08 \uB4F1\uB85D';
+  document.getElementById('dueType').value   = dueType;
   document.getElementById('dueAmount').value = d?.amount || '';
   document.getElementById('dueDate').value   = normalizeDate(d?.date) || today;
   document.getElementById('dueNote').value   = d?.note   || '';
-  document.getElementById('dueType').value   = d?.type   || 'payment';
 
-  // 선수 드롭다운 채우기
   const sel = document.getElementById('duePid');
-  sel.innerHTML = '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
-    players.filter(p=>!p.isMercenary).sort((a,b)=>(a.jersey??99)-(b.jersey??99))
-      .map(p=>`<option value="${p.id}" ${d?.pid==p.id?'selected':''}>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</option>`).join('');
+  const selectedPid = d?.pid != null ? String(d.pid) : '';
+  sel.innerHTML =
+    '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
+    players.filter(p => !p.isMercenary).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
+      .map(p => `<option value="${p.id}" ${selectedPid === String(p.id) ? 'selected' : ''}>${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`).join('');
+  if (dueType !== DUE_TYPE_OTHER && selectedPid) sel.value = selectedPid;
 
+  updateDueFormMode();
   document.getElementById('duesModal').classList.add('open');
 }
 function closeDuesModal() { document.getElementById('duesModal').classList.remove('open'); }
 function saveDue() {
-  const pid    = parseInt(document.getElementById('duePid').value);
-  const amount = parseInt(document.getElementById('dueAmount').value);
+  const type   = document.getElementById('dueType').value;
+  const amount = parseInt(document.getElementById('dueAmount').value, 10);
   const date   = normalizeDate(document.getElementById('dueDate').value);
   const note   = document.getElementById('dueNote').value.trim();
-  const type   = document.getElementById('dueType').value;
-  if (!pid || !amount || !date) { alert('\uC120\uC218 · \uAE08\uC561 · \uB0A0\uC9DC\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
-  if (editingDueId) {
-    const idx = dues.findIndex(x=>x.id==editingDueId);
-    if (idx>=0) dues[idx] = {...dues[idx], pid, amount, date, note, type};
+  let pid = null;
+
+  if (type === DUE_TYPE_PAYMENT) {
+    const pidRaw = document.getElementById('duePid').value;
+    if (pidRaw === '') { alert('\uC120\uC218\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694'); return; }
+    pid = parseInt(pidRaw, 10);
+    if (!amount || !date) { alert('\uC120\uC218 \u00B7 \uAE08\uC561 \u00B7 \uB0A0\uC9DC\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
   } else {
-    dues.push({ id: Date.now(), pid, amount, date, note, type });
+    if (!amount || !date || !note) { alert('\uAE08\uC561 \u00B7 \uB0A0\uC9DC \u00B7 \uBA54\uBAA8(\uC99D\uBE59)\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
+  }
+
+  const record = { pid, amount, date, note, type };
+  if (editingDueId) {
+    const idx = dues.findIndex(x => x.id == editingDueId);
+    if (idx >= 0) dues[idx] = { ...dues[idx], ...record };
+  } else {
+    dues.push({ id: Date.now(), ...record });
   }
   closeDuesModal();
   persistDues().catch(handleSaveError);
@@ -3406,7 +3458,7 @@ function saveExpense() {
   const amount   = parseInt(document.getElementById('expenseAmount').value);
   const category = document.getElementById('expenseCategory').value.trim();
   const note     = document.getElementById('expenseNote').value.trim();
-  if (!date || !amount || !category) { alert('\uB0A0\uC9DC · \uAE08\uC561 · \uC0AC\uC6A9\uCC98\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
+  if (!date || !amount || !category || !note) { alert('\uB0A0\uC9DC \u00B7 \uAE08\uC561 \u00B7 \uC0AC\uC6A9\uCC98 \u00B7 \uBA54\uBAA8(\uC99D\uBE59)\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
   if (editingExpenseId) {
     const idx = expenses.findIndex(x=>x.id==editingExpenseId);
     if (idx>=0) expenses[idx] = {...expenses[idx], date, amount, category, note};
@@ -3431,13 +3483,8 @@ function previewSettlement() {
   if (!from || !to) { alert('\uC815\uC0B0 \uAE30\uAC04\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694'); return; }
   const regularPlayers = players.filter(p => !p.isMercenary);
 
-  // 이미 이 기간과 완전히 겹치는 정산 완료 여부 체크
-  const alreadySettled = settlements.some(s =>
-    s.status === 'done' && s.startDate === from && s.endDate === to
-  );
-
   const rows = regularPlayers.map(p => {
-    const wage = computeUnsettledWage(p.id);
+    const wage = computeUnsettledWage(p.id, from, to);
     return { p, wage };
   }).filter(r => r.wage > 0);
 
@@ -3449,22 +3496,24 @@ function previewSettlement() {
     return;
   }
 
-  const totalAmt = rows.reduce((s,r)=>s+r.wage,0);
+  const totalAmt = rows.reduce((s, r) => s + r.wage, 0);
+  const canSettleAny = rows.some(r => !settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done'));
   preview.innerHTML = `
     <div class="tr-settlement-preview">
       <div class="tr-preview-header">
         <span>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC — <strong>${formatDateDisplay(from)} ~ ${formatDateDisplay(to)}</strong> · \uCD1D <strong>${fmtMoney(totalAmt)}</strong></span>
-        ${alreadySettled ? '<span class="tr-warn-badge">\uC774 \uAE30\uAC04 \uC774\uBBF8 \uC815\uC0B0\uB428</span>' : `<button class="tr-btn-primary" onclick="executeSettlement('${from}','${to}')">\uC804\uCCB4 \uC815\uC0B0 \uC2E4\uD589</button>`}
+        ${canSettleAny ? `<button class="tr-btn-primary" onclick="executeSettlement('${from}','${to}')">\uC804\uCCB4 \uC815\uC0B0 \uC2E4\uD589</button>` : '<span class="tr-warn-badge">\uC774 \uAE30\uAC04 \uC774\uBBF8 \uC815\uC0B0\uB428</span>'}
       </div>
       <table class="tr-table">
-        <thead><tr><th>\uC120\uC218</th><th>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC</th><th>\uC815\uC0B0 \uC0C1\uD0DC</th></tr></thead>
+        <thead><tr><th>\uC120\uC218</th><th>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC</th><th>\uC0C1\uD0DC</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r => {
-            const existing = settlements.find(s=>s.pid==r.p.id&&s.startDate===from&&s.endDate===to&&s.status==='done');
+            const existing = settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done');
             return `<tr>
-              <td>${r.p.jersey!=null?'#'+r.p.jersey+' ':''}${r.p.name}</td>
+              <td>${r.p.jersey != null ? '#' + r.p.jersey + ' ' : ''}${r.p.name}</td>
               <td>${fmtMoney(r.wage)}</td>
               <td>${existing ? '<span class="tr-status-badge settled">\uC815\uC0B0\uC644\uB8CC</span>' : '<span class="tr-status-badge">\uBBF8\uC815\uC0B0</span>'}</td>
+              <td>${existing ? '' : `<button class="tr-btn-sm" onclick="executeSingleSettlement(${r.p.id},'${from}','${to}')">\uC815\uC0B0</button>`}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3472,41 +3521,76 @@ function previewSettlement() {
     </div>`;
 }
 
-function executeSettlement(from, to) {
-  const regularPlayers = players.filter(p => !p.isMercenary);
-  const today = new Date().toISOString().slice(0,10);
+function runSettlementBatch(from, to, pids) {
+  const today = new Date().toISOString().slice(0, 10);
+  const settlementGroupId = Date.now();
   const settledItems = [];
-  regularPlayers.forEach(p => {
-    const wage = computeUnsettledWage(p.id);
+  pids.forEach(pid => {
+    const wage = computeUnsettledWage(pid, from, to);
     if (wage <= 0) return;
-    // 이미 이 기간 정산된 항목 제외
-    const already = settlements.find(s=>s.pid==p.id&&s.startDate===from&&s.endDate===to&&s.status==='done');
+    const already = settlements.find(s => s.pid == pid && s.startDate === from && s.endDate === to && s.status === 'done');
     if (already) return;
-    settledItems.push({ id: Date.now() + Math.random(), startDate:from, endDate:to, pid:p.id, settledAmount:wage, settledAt:today, status:'done' });
+    settledItems.push({
+      id: Date.now() + Math.random(),
+      groupId: settlementGroupId,
+      startDate: from,
+      endDate: to,
+      pid,
+      settledAmount: wage,
+      settledAt: today,
+      status: 'done',
+    });
   });
-  if (!settledItems.length) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
-
-  const total = settledItems.reduce((s,x)=>s+(x.settledAmount||0),0);
-  const note  = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} (${settledItems.length}\uBA85, \uCD1D ${fmtMoney(total)})`;
-  const newExpense = { id: Date.now(), date: today, amount: total, category: '\uB9AC\uC6CC\uB4DC\uC815\uC0B0', note, status: 'active', settlementId: today };
-
+  if (!settledItems.length) return null;
+  const total = settledItems.reduce((s, x) => s + (x.settledAmount || 0), 0);
+  const names = settledItems.map(s => {
+    const p = players.find(pl => pl.id == s.pid);
+    return p ? p.name : ('#' + s.pid);
+  }).join(', ');
+  const note = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} / ${settledItems.length}\uBA85(${names}) / \uCD1D ${fmtMoney(total)}`;
+  const newExpense = {
+    id: Date.now() + 1,
+    date: today,
+    amount: total,
+    category: '\uB9AC\uC6CC\uB4DC\uC815\uC0B0',
+    note,
+    status: 'active',
+    settlementId: settlementGroupId,
+  };
   settlements.push(...settledItems);
   expenses.push(newExpense);
+  return { count: settledItems.length, total };
+}
+
+function executeSettlement(from, to) {
+  const regularPlayers = players.filter(p => !p.isMercenary);
+  const result = runSettlementBatch(from, to, regularPlayers.map(p => p.id));
+  if (!result) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
   Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
-  alert(`\uC815\uC0B0 \uC644\uB8CC! ${settledItems.length}\uBA85, \uCD1D ${fmtMoney(total)}`);
+  alert(`\uC815\uC0B0 \uC644\uB8CC! ${result.count}\uBA85, \uCD1D ${fmtMoney(result.total)}`);
+  renderTreasurer();
+}
+
+function executeSingleSettlement(pid, from, to) {
+  const result = runSettlementBatch(from, to, [pid]);
+  if (!result) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
+  Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
+  alert(`\uC815\uC0B0 \uC644\uB8CC! ${dueTargetLabel(pid)}, ${fmtMoney(result.total)}`);
   renderTreasurer();
 }
 
 function cancelSettlement(key) {
-  if (!confirm('\uC774 \uC815\uC0B0\uC744 \uCDE8\uC18C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? \uC5F0\uACB0\uB41C \uC9C0\uCD9C\uB3C4 \uCDE8\uC18C\uB429\uB2C8\uB2E4.')) return;
-  const [dateRange, settledAt] = key.split('|');
-  const [startDate, endDate]   = dateRange.split('~');
-  settlements.forEach(s => {
-    if (s.startDate===startDate && s.endDate===endDate && s.settledAt===settledAt) s.status='cancelled';
-  });
-  expenses.forEach(ex => {
-    if (ex.settlementId === settledAt) ex.status = 'cancelled';
-  });
+  if (!confirm('\uC774 \uC815\uC0B0\uC744 \uCDE8\uC18C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? \uC5F0\uACB0\uB41C \uC9C0\uCD9C \uAE30\uB85D\uB3C4 \uC0AD\uC81C\uB418\uBA70, \uD574\uB2F9 \uB9AC\uC6CC\uB4DC\uB294 \uB2E4\uC2DC \uBBF8\uC815\uC0B0\uC73C\uB85C \uC7A1\uD799\uB2C8\uB2E4.')) return;
+  const groupId = /^\d+$/.test(key) ? Number(key) : null;
+  if (groupId) {
+    settlements = settlements.filter(s => s.groupId !== groupId);
+    expenses = expenses.filter(ex => ex.settlementId != groupId);
+  } else {
+    const [dateRange, settledAt] = key.split('|');
+    const [startDate, endDate] = dateRange.split('~');
+    settlements = settlements.filter(s => !(s.startDate === startDate && s.endDate === endDate && s.settledAt === settledAt));
+    expenses = expenses.filter(ex => ex.settlementId != settledAt && ex.settlementId !== settledAt);
+  }
   Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
   renderTreasurer();
 }

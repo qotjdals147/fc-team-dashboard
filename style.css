@@ -734,16 +734,20 @@ body.presentation-mode #presentQuarterBtns .quarter-btn {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 상단 빠른 등록 */
-.tr-quick-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--bg);
-  padding-bottom: 4px;
+/* 스크롤 박스 (입금·정산 기록) */
+.tr-scroll-box {
+  max-height: 280px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  -webkit-overflow-scrolling: touch;
+}
+.tr-scroll-box .tr-table-wrap { border: none; border-radius: 0; }
+.tr-memo-cell {
+  max-width: 140px;
+  word-break: break-word;
+  font-size: 12px;
+  color: var(--text2);
 }
 
 /* 섹션 카드 */
@@ -894,35 +898,6 @@ body.presentation-mode #presentQuarterBtns .quarter-btn {
 }
 .tr-status-badge.settled  { background: #bbf7d0; color: #14532d; border-color: #16a34a; }
 .tr-status-badge.cancelled { background: #fecaca; color: #7f1d1d; border-color: #dc2626; }
-
-/* 회비 목록 */
-.tr-dues-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.tr-due-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--text);
-}
-
-.tr-due-date  { color: var(--text2); white-space: nowrap; font-size: 12px; }
-.tr-due-name  { font-weight: 700; flex: 1; min-width: 60px; color: var(--text); }
-.tr-due-type.payment { color: #16a34a; font-size: 11px; font-weight: 700; }
-.tr-due-type.refund  { color: #dc2626; font-size: 11px; font-weight: 700; }
-.tr-due-amount { font-weight: 700; color: var(--text); white-space: nowrap; }
-.tr-due-note   { color: var(--text2); font-size: 11px; flex: 1; }
 
 /* 빈 상태 */
 .tr-empty {

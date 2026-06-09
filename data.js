@@ -52,10 +52,19 @@ function normalizeMatchDates(list) {
   return (list || []).map(m => ({ ...m, date: normalizeDate(m.date) || m.date }));
 }
 function normalizeDuesDates(list) {
-  return (list || []).map(d => ({ ...d, date: normalizeDate(d.date) }));
+  return (list || []).map(d => {
+    const rec = { ...d, date: normalizeDate(d.date) };
+    if (rec.pid == 0 && rec.type !== 'other') rec.type = 'other';
+    if (rec.type === 'other') rec.pid = null;
+    return rec;
+  });
 }
 function normalizeExpenseDates(list) {
-  return (list || []).map(e => ({ ...e, date: normalizeDate(e.date) }));
+  return (list || []).map(e => ({
+    ...e,
+    date: normalizeDate(e.date),
+    status: e.status || 'active',
+  }));
 }
 function normalizeSettlementDates(list) {
   return (list || []).map(s => ({

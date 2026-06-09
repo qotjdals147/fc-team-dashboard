@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=61">
+<link rel="stylesheet" href="style.css?v=64">
 
 
 
@@ -138,7 +138,10 @@
 
 
 
-  <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">&#x1F512;</button>
+  <div class="sync-bar-actions">
+    <button type="button" id="treasurerToggleBtn" class="btn-treasurer-lock" onclick="toggleTreasurerMode()" title="총무 모드 진입">&#x1F4B0;</button>
+    <button type="button" id="adminToggleBtn" class="btn-admin-lock" onclick="toggleAdminMode()" title="관리자 모드">&#x1F512;</button>
+  </div>
 
 
 
@@ -195,6 +198,7 @@
 
 
   <button class="tab-btn admin-only" id="statsTabBtn" onclick="switchTab('stats')"><i class="ti ti-chart-bar"></i>통계</button>
+  <button class="tab-btn treasurer-only" id="treasurerTabBtn" onclick="switchTab('treasurer')" style="display:none"><i class="ti ti-wallet"></i>총무</button>
 
 
 
@@ -1600,6 +1604,9 @@
 
 
 
+
+<div id="tab-treasurer" class="tab-panel"></div>
+
 <div id="tab-records" class="tab-panel">
 
 
@@ -2039,6 +2046,117 @@
 
 
 
+
+<!-- ── 총무 비밀번호 입력 모달 ── -->
+<div class="modal-bg" id="treasurerModal">
+  <div class="modal modal-sm">
+    <h3>총무 모드 입력</h3>
+    <p style="font-size:13px;color:var(--text3);margin:0 0 14px">비밀번호를 입력해주세요</p>
+    <div class="form-field">
+      <input type="password" id="treasurerPwInput" inputmode="numeric" placeholder="비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitTreasurerPw()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeTreasurerModal()">취소</button>
+      <button class="btn-save-modal" onclick="submitTreasurerPw()">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 총무 옵션 모달 ── -->
+<div class="modal-bg" id="treasurerOptionsModal">
+  <div class="modal modal-sm">
+    <h3>총무 메뉴</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+      <button class="btn-save-modal" style="background:#ef4444" onclick="exitTreasurerMode()">총무 모드 해제</button>
+      <button class="btn-save-modal" onclick="openTreasurerPwChangeModal()">비밀번호 변경</button>
+      <button class="btn-cancel" onclick="closeTreasurerOptionsModal()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 총무 비밀번호 변경 모달 ── -->
+<div class="modal-bg" id="treasurerPwChangeModal">
+  <div class="modal modal-sm">
+    <h3>비밀번호 변경</h3>
+    <div class="form-field">
+      <label>현재 비밀번호</label>
+      <input type="password" id="trPwCurrent" inputmode="numeric" placeholder="현재 비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('trPwNew').focus()">
+    </div>
+    <div class="form-field">
+      <label>새 비밀번호</label>
+      <input type="password" id="trPwNew" inputmode="numeric" placeholder="새 비밀번호" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')document.getElementById('trPwConfirm').focus()">
+    </div>
+    <div class="form-field">
+      <label>새 비밀번호 확인</label>
+      <input type="password" id="trPwConfirm" inputmode="numeric" placeholder="새 비밀번호 확인" autocomplete="off" maxlength="20" onkeydown="if(event.key==='Enter')submitTreasurerPwChange()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeTreasurerPwChangeModal()">취소</button>
+      <button class="btn-save-modal" onclick="submitTreasurerPwChange()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 회비 입금 모달 ── -->
+<div class="modal-bg" id="duesModal">
+  <div class="modal modal-sm">
+    <h3 id="dueModalTitle">회비 입금</h3>
+    <div class="form-field">
+      <label>선수</label>
+      <select id="duePid" class="formation-select"><option value="">선수 선택</option></select>
+    </div>
+    <div class="form-field">
+      <label>금액 (원)</label>
+      <input type="number" id="dueAmount" min="0" step="1000" placeholder="예: 50000" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>날짜</label>
+      <input type="date" id="dueDate">
+    </div>
+    <div class="form-field">
+      <label>유형</label>
+      <select id="dueType" class="formation-select">
+        <option value="payment">입금</option>
+        <option value="refund">환불</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label>메모 (선택)</label>
+      <input type="text" id="dueNote" placeholder="예: 3월 회비" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDuesModal()">취소</button>
+      <button class="btn-save-modal" onclick="saveDue()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 지출 등록 모달 ── -->
+<div class="modal-bg" id="expenseModal">
+  <div class="modal modal-sm">
+    <h3 id="expenseModalTitle">지출 등록</h3>
+    <div class="form-field">
+      <label>날짜</label>
+      <input type="date" id="expenseDate">
+    </div>
+    <div class="form-field">
+      <label>금액 (원)</label>
+      <input type="number" id="expenseAmount" min="0" step="1000" placeholder="예: 150000" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>사용처</label>
+      <input type="text" id="expenseCategory" placeholder="예: 회식, 용품 구매" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>메모 (선택)</label>
+      <input type="text" id="expenseNote" placeholder="추가 설명" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeExpenseModal()">취소</button>
+      <button class="btn-save-modal" onclick="saveExpense()">저장</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="matchModal">
 
@@ -3072,7 +3190,7 @@
 
 
 
-<script src="data.js?v=61"></script>
+<script src="data.js?v=64"></script>
 
 
 
@@ -3080,7 +3198,7 @@
 
 
 
-<script src="api.js?v=61"></script>
+<script src="api.js?v=64"></script>
 
 
 
@@ -3088,7 +3206,7 @@
 
 
 
-<script src="app.js?v=61"></script>
+<script src="app.js?v=64"></script>
 
 
 

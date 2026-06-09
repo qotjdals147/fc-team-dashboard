@@ -36,8 +36,11 @@ body { font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; backgro
 /* 비관리자일 때 admin-only 요소 숨김 */
 body:not(.is-admin) .admin-only { display:none !important; }
 /* 탭바 잠금 버튼 */
-.btn-admin-lock { background:none; border:none; cursor:pointer; font-size:18px; padding:6px 10px; color:var(--text3); flex-shrink:0; margin-left:auto; line-height:1; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.sync-bar-actions { display:flex; align-items:center; gap:2px; margin-left:auto; flex-shrink:0; }
+.btn-admin-lock,
+.btn-treasurer-lock { background:none; border:none; cursor:pointer; font-size:18px; padding:6px 10px; color:var(--text3); flex-shrink:0; line-height:1; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 .btn-admin-lock.active { color:#22c55e; }
+.btn-treasurer-lock.active { color:#f59e0b; }
 /* 포메이션 탭 비관리자용 포메이션 이름 레이블 */
 .formation-view-label { font-size:13px; font-weight:600; color:var(--text2); padding:8px 12px 4px; }
 .is-admin .formation-view-label { display:none; }
@@ -710,4 +713,248 @@ body.presentation-mode #presentQuarterBtns .quarter-btn {
   border-radius: calc(8px * var(--ps-quarter,1)) !important;
   min-width: calc(32px * var(--ps-quarter,1)) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+/* ════════════════════════════════════════
+   총무 페이지 스타일
+   ════════════════════════════════════════ */
+
+/* 총무 탭 전체 래퍼 */
+.tr-page {
+  padding: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 섹션 카드 */
+.tr-section {
+  background: var(--surface2);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tr-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tr-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text1);
+}
+
+.tr-subsection-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-top: 4px;
+}
+
+/* 요약 카드 */
+.tr-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 500px) {
+  .tr-cards { grid-template-columns: repeat(4, 1fr); }
+}
+
+.tr-card {
+  background: var(--surface3, #1e293b);
+  border-radius: 10px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tr-card-label {
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.tr-card-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+.tr-card-value.income  { color: #34d399; }
+.tr-card-value.expense { color: #f87171; }
+.tr-card-value.balance { color: #60a5fa; }
+.tr-card-value.budget  { color: #fbbf24; font-size: 12px; }
+
+/* 추가 버튼 */
+.tr-btn-add {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s;
+  white-space: nowrap;
+}
+.tr-btn-add:hover { opacity: .85; }
+
+.tr-btn-primary {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s;
+  white-space: nowrap;
+}
+.tr-btn-primary:hover { opacity: .85; }
+
+.tr-btn-sm {
+  background: var(--surface3, #1e293b);
+  color: var(--text2);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.tr-btn-sm:hover { background: rgba(255,255,255,.1); }
+.tr-btn-sm.danger { color: #f87171; }
+
+/* 테이블 */
+.tr-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+}
+
+.tr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tr-table thead th {
+  background: var(--surface3, #1e293b);
+  color: var(--text3);
+  font-weight: 600;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tr-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  color: var(--text1);
+  vertical-align: middle;
+}
+
+.tr-table tbody tr:last-child td { border-bottom: none; }
+.tr-table tbody tr:hover td { background: rgba(255,255,255,.04); }
+.tr-table tbody tr.tr-cancelled td { opacity: .5; text-decoration: line-through; }
+.tr-warn td { background: rgba(251,191,36,.07) !important; }
+
+/* 상태 뱃지 */
+.tr-status-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(255,255,255,.1);
+  color: var(--text2);
+}
+.tr-status-badge.settled  { background: rgba(52,211,153,.2); color: #34d399; }
+.tr-status-badge.cancelled { background: rgba(248,113,113,.2); color: #f87171; }
+
+/* 회비 목록 */
+.tr-dues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tr-due-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--surface3, #1e293b);
+  border-radius: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.tr-due-date  { color: var(--text3); white-space: nowrap; font-size: 12px; }
+.tr-due-name  { font-weight: 600; flex: 1; min-width: 60px; }
+.tr-due-type.payment { color: #34d399; font-size: 11px; }
+.tr-due-type.refund  { color: #f87171; font-size: 11px; }
+.tr-due-amount { font-weight: 700; color: var(--text1); white-space: nowrap; }
+.tr-due-note   { color: var(--text3); font-size: 11px; flex: 1; }
+
+/* 빈 상태 */
+.tr-empty {
+  text-align: center;
+  color: var(--text3);
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+/* 정산 폼 */
+.tr-settlement-form { display: flex; flex-direction: column; gap: 10px; }
+.tr-date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tr-date-row label { font-size: 13px; color: var(--text2); white-space: nowrap; }
+.tr-date-input {
+  background: var(--surface3, #1e293b);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  color: var(--text1);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* 정산 미리보기 */
+.tr-settlement-preview {
+  background: var(--surface3, #1e293b);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tr-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+}
+.tr-warn-badge {
+  background: rgba(251,191,36,.2);
+  color: #fbbf24;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
 }

@@ -716,8 +716,12 @@ function applyRemoteData(data) {
   if (data.meta?.treasurerPw) localStorage.setItem('fc_treasurer_pw', data.meta.treasurerPw);
   // 총무 데이터 (시트 Date/ISO → YYYY-MM-DD)
   dues        = normalizeDuesDates(data.dues || []);
-  expenses    = normalizeExpenseDates(data.expenses || []).filter(e => e.status !== 'cancelled');
-  settlements = normalizeSettlementDates(data.settlements || []).filter(s => s.status !== 'cancelled');
+  expenses    = normalizeExpenseDates(data.expenses || []);
+  settlements = normalizeSettlementDates(data.settlements || []);
+  if (cleanupTreasurerData()) {
+    persistExpenses().catch(() => {});
+    persistSettlements().catch(() => {});
+  }
   // 슬라이드쇼 URLs
   const rawUrls = data.meta?.teamPhotoUrls;
   if (rawUrls) {
@@ -855,8 +859,9 @@ function loadLocalFallback() {
   currentPhotoIdx = 0;
   photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
   dues        = normalizeDuesDates(JSON.parse(localStorage.getItem('fc_dues')        || '[]'));
-  expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]')).filter(e => e.status !== 'cancelled');
-  settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]')).filter(s => s.status !== 'cancelled');
+  expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]'));
+  settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]'));
+  cleanupTreasurerData();
   loadFieldState();
 }
 function hasLocalData() {
@@ -973,7 +978,7 @@ function normalizePhotoUrl(url) {
 function applyPhotoTransform() {
   const img = document.getElementById('homePhoto');
   if (!img) return;
-  img.style.transform = `translate(${photoTransform.x}px, ${photoTransform.y}px) scale(${photoTransform.scale})`;
+  img.style.transform = `translate(calc(-50% + ${photoTransform.x}px), calc(-50% + ${photoTransform.y}px)) scale(${photoTransform.scale})`;
   img.style.transformOrigin = 'center center';
 }
 let _photoSaveTimer = null;
@@ -997,8 +1002,11 @@ function goToPhoto(idx) {
   currentPhotoIdx = ((idx % photoUrls.length) + photoUrls.length) % photoUrls.length;
   photoTransform = photoTransforms[currentPhotoIdx] || { x:0, y:0, scale:1 };
   const img = document.getElementById('homePhoto');
-  if (img) { img.src = photoUrls[currentPhotoIdx]; }
-  applyPhotoTransform();
+  if (img) {
+    img.onload = () => applyPhotoTransform();
+    img.src = photoUrls[currentPhotoIdx];
+    if (img.complete) applyPhotoTransform();
+  }
   updateSlideDots();
   startSlideTimer();
 }
@@ -1093,12 +1101,13 @@ function renderHome() {
   const currentUrl = photoUrls[currentPhotoIdx] || '';
   if (img && ph) {
     if (currentUrl) {
-      img.src = currentUrl;
       img.draggable = false;
       img.style.display = 'block';
       ph.style.display = 'none';
       img.onerror = () => { img.style.display = 'none'; ph.style.display = 'flex'; };
-      applyPhotoTransform();
+      img.onload = () => applyPhotoTransform();
+      img.src = currentUrl;
+      if (img.complete) applyPhotoTransform();
     } else {
       img.style.display = 'none';
       img.removeAttribute('src');
@@ -3165,6 +3174,30 @@ function settlementGroupLabel(items) {
   return active.length + '\uBA85 \u00B7 ' + names.join(', ') + suffix;
 }
 
+// 고아·취소·중복 정산 지출 정리 (구버전 취소 버그 잔여 데이터 포함)
+function cleanupTreasurerData() {
+  const beforeS = settlements.length;
+  const beforeE = expenses.length;
+  settlements = settlements.filter(s => s.status !== 'cancelled');
+  expenses = expenses.filter(e => e.status !== 'cancelled');
+  const isRewardExpense = e =>
+    e.settlementId != null || e.category === '\uB9AC\uC6CC\uB4DC\uC815\uC0B0' || e.category === '\uB9AC\uC6CC\uB4DC \uC815\uC0B0';
+  expenses = expenses.filter(e => {
+    if (!isRewardExpense(e)) return true;
+    if (e.settlementId == null) return false;
+    return settlements.some(s => s.groupId == e.settlementId && s.status === 'done');
+  });
+  const seenGroup = new Set();
+  expenses = expenses.filter(e => {
+    if (e.settlementId == null) return true;
+    const k = String(e.settlementId);
+    if (seenGroup.has(k)) return false;
+    seenGroup.add(k);
+    return true;
+  });
+  return beforeS !== settlements.length || beforeE !== expenses.length;
+}
+
 // persist 함수
 async function persistDues()        { await apiSavePartial({ dues });        localStorage.setItem('fc_dues',        JSON.stringify(dues));        }
 async function persistExpenses()    { await apiSavePartial({ expenses });    localStorage.setItem('fc_expenses',    JSON.stringify(expenses));    }
@@ -3267,19 +3300,20 @@ function renderTreasurer() {
       <div class="tr-section-title">\uD83D\uDCB8 \uC9C0\uCD9C \uAE30\uB85D</div>
       <button class="tr-btn-add" onclick="openExpenseModal()">\uFF0B \uC9C0\uCD9C \uB4F1\uB85D</button>
     </div>
-    <div class="tr-table-wrap">
+    <div class="tr-table-wrap tr-expense-scroll">
       <table class="tr-table">
         <thead><tr><th>\uB0A0\uC9DC</th><th>\uC0AC\uC6A9\uCC98</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th>\uC720\uD615</th><th></th></tr></thead>
         <tbody>
           ${expenses.filter(e => e.status !== 'cancelled').slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ex => {
             const isSettle = !!ex.settlementId;
-            const typeLabel = isSettle ? '\uB9AC\uC6CC\uB4DC\uC815\uC0B0' : '\uC9C0\uCD9C';
+            const catLabel = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : (ex.category || '');
+            const typeLabel = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : '\uC9C0\uCD9C';
             return `<tr>
-              <td>${formatDateDisplay(ex.date)}</td>
-              <td>${ex.category||''}</td>
-              <td>${fmtMoney(ex.amount)}</td>
+              <td class="tr-nowrap">${formatDateDisplay(ex.date)}</td>
+              <td class="tr-nowrap">${catLabel}</td>
+              <td class="tr-nowrap">${fmtMoney(ex.amount)}</td>
               <td class="tr-memo-cell">${ex.note || '-'}</td>
-              <td><span class="tr-status-badge ${isSettle?'settled':''}">${typeLabel}</span></td>
+              <td><span class="tr-status-badge tr-nowrap ${isSettle?'settled':''}">${typeLabel}</span></td>
               <td>${isSettle?'':`<button class="tr-btn-sm" onclick="deleteExpense('${ex.id}')">\uC0AD\uC81C</button>`}</td>
             </tr>`;
           }).join('') || '<tr><td colspan="6" class="tr-empty">\uC9C0\uCD9C \uAE30\uB85D \uC5C6\uC74C</td></tr>'}
@@ -3552,7 +3586,7 @@ function runSettlementBatch(from, to, pids) {
     id: Date.now() + 1,
     date: today,
     amount: total,
-    category: '\uB9AC\uC6CC\uB4DC\uC815\uC0B0',
+    category: '\uB9AC\uC6CC\uB4DC \uC815\uC0B0',
     note,
     status: 'active',
     settlementId: settlementGroupId,

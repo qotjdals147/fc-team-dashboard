@@ -3199,10 +3199,15 @@ function renderTreasurer() {
   wrap.innerHTML = `
 <div class="tr-page">
 
+  <div class="tr-quick-actions">
+    <button class="tr-btn-add" onclick="openDuesModal()">\uFF0B \uD68C\uBE44 \uC785\uAE08</button>
+    <button class="tr-btn-add" onclick="openExpenseModal()">\uFF0B \uC9C0\uCD9C \uB4F1\uB85D</button>
+  </div>
+
   <!-- ① 요약 대시보드 -->
   <div class="tr-section">
     <div class="tr-section-title">\uD83D\uDCCA \uC694\uC57D \uB300\uC2DC\uBCF4\uB4DC</div>
-    <div class="tr-cards">
+    <div class="tr-cards tr-cards-vertical">
       <div class="tr-card"><div class="tr-card-label">\uCD1D \uD68C\uBE44 \uC218\uC785</div><div class="tr-card-value income">${fmtMoney(totalIncome)}</div></div>
       <div class="tr-card"><div class="tr-card-label">\uCD1D \uC9C0\uCD9C</div><div class="tr-card-value expense">${fmtMoney(totalExpense)}</div></div>
       <div class="tr-card"><div class="tr-card-label">\uD604\uC7AC \uC794\uC561</div><div class="tr-card-value balance">${fmtMoney(balance)}</div></div>

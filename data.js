@@ -74,6 +74,32 @@ function normalizeSettlementDates(list) {
     settledAt: normalizeDate(s.settledAt),
   }));
 }
+function normalizeScheduleDates(list) {
+  return (list || []).map(s => ({ ...s, date: normalizeDate(s.date) }));
+}
+function normalizeNoticeDates(list) {
+  return (list || []).map(n => ({ ...n, date: normalizeDate(n.date) }));
+}
+function normalizeExemptionMonths(list) {
+  return (list || []).map(e => ({
+    ...e,
+    fromMonth: (e.fromMonth || '').slice(0, 7),
+    toMonth: (e.toMonth || '').slice(0, 7),
+  }));
+}
+function currentYearMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+function yearMonthFromDate(dateStr) {
+  const d = normalizeDate(dateStr);
+  return d ? d.slice(0, 7) : '';
+}
+function formatYearMonthDisplay(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  return `${y}년 ${parseInt(m, 10)}월`;
+}
 
 // OVR 가장 높은 포지션 (= 주포지션) 반환
 function primaryPos(p) {

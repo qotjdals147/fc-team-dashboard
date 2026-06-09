@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=71">
+<link rel="stylesheet" href="style.css?v=72">
 
 
 
@@ -326,7 +326,10 @@
 
 
 
-    <div class="home-members">
+        <div class="home-quick-actions">
+      <button type="button" class="home-quick-btn" onclick="openScheduleModal()"><i class="ti ti-calendar-event"></i> 경기 일정</button>
+      <button type="button" class="home-quick-btn" onclick="openNoticeModal()"><i class="ti ti-speakerphone"></i> 공지사항</button>
+    </div><div class="home-members">
 
 
 
@@ -638,7 +641,7 @@
 
 
 
-  <div class="quarter-bar admin-only" id="quarterBar">
+  <div class="quarter-bar" id="quarterBar">
 
 
 
@@ -868,150 +871,6 @@
 
 
 
-      <span class="pp-label">&#xD1A0;&#xD070; &#xD06C;&#xAE30;</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('token',-1)">&#x2212;</button>
-
-
-
-
-
-
-
-      <span class="pp-val" id="psToken">100%</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('token',1)">+</button>
-
-
-
-
-
-
-
-    </div>
-
-
-
-
-
-
-
-    <div class="pp-scale-row">
-
-
-
-
-
-
-
-      <span class="pp-label">&#xBC24;&#xCE58; &#xAE00;&#xC528;</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('bench',-1)">&#x2212;</button>
-
-
-
-
-
-
-
-      <span class="pp-val" id="psBench">100%</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('bench',1)">+</button>
-
-
-
-
-
-
-
-    </div>
-
-
-
-
-
-
-
-    <div class="pp-scale-row">
-
-
-
-
-
-
-
-      <span class="pp-label">&#xBA64;&#xBC84; &#xAE00;&#xC528;</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('avail',-1)">&#x2212;</button>
-
-
-
-
-
-
-
-      <span class="pp-val" id="psAvail">100%</span>
-
-
-
-
-
-
-
-      <button class="pp-btn" onclick="stepPresentScale('avail',1)">+</button>
-
-
-
-
-
-
-
-    </div>
-
-
-
-
-
-
-
-    <div class="pp-scale-row">
-
-
-
-
-
-
-
       <span class="pp-label">&#xCFFC;&#xD130; &#xBC84;&#xD2BC;</span>
 
 
@@ -1068,7 +927,7 @@
 
 
 
-      <button class="pp-btn" onclick="stepPresentScale('panel',-1)">&#x2212;</button>
+      <button class="pp-btn" onclick="stepPresentScale('panelRight',-1)">&#x2212;</button>
 
 
 
@@ -1084,7 +943,7 @@
 
 
 
-      <button class="pp-btn" onclick="stepPresentScale('panel',1)">+</button>
+      <button class="pp-btn" onclick="stepPresentScale('panelRight',1)">+</button>
 
 
 
@@ -1316,7 +1175,7 @@
 
 
 
-      <button class="pp-btn" onclick="stepPresentScale('panel',-1)">&#x2212;</button>
+      <button class="pp-btn" onclick="stepPresentScale('panelLeft',-1)">&#x2212;</button>
 
 
 
@@ -1332,7 +1191,7 @@
 
 
 
-      <button class="pp-btn" onclick="stepPresentScale('panel',1)">+</button>
+      <button class="pp-btn" onclick="stepPresentScale('panelLeft',1)">+</button>
 
 
 
@@ -2158,6 +2017,82 @@
   </div>
 </div>
 
+
+<!-- modals: schedule notice bulk exemption -->
+<div class="modal-bg" id="scheduleModal">
+  <div class="modal">
+    <div class="modal-section-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0">寃쎄린 ?쇱젙</h3>
+      <button type="button" class="tr-btn-sm admin-only" id="scheduleAddBtn" onclick="openScheduleEditModal()">+ 異붽?</button>
+    </div>
+    <div id="scheduleModalBody"></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeScheduleModal()">?リ린</button></div>
+  </div>
+</div>
+<div class="modal-bg" id="scheduleEditModal">
+  <div class="modal modal-sm">
+    <h3>寃쎄린 ?쇱젙</h3>
+    <div class="form-field"><label>?좎쭨</label><input type="date" id="schedDate"></div>
+    <div class="form-field"><label>?쒓컙 (?좏깮)</label><input type="time" id="schedTime"></div>
+    <div class="form-field"><label>?곷? ?</label><input type="text" id="schedOpponent" placeholder="?? FC ?쒖슱" autocomplete="off"></div>
+    <div class="form-field"><label>硫붾え (?좏깮)</label><input type="text" id="schedNote" placeholder="?? ??寃쎄린" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeScheduleEditModal()">痍⑥냼</button>
+      <button class="btn-save-modal" onclick="saveScheduleItem()">???/button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="noticeModal">
+  <div class="modal">
+    <div class="modal-section-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0">怨듭??ы빆</h3>
+      <button type="button" class="tr-btn-sm admin-only" id="noticeAddBtn" onclick="openNoticeEditModal()">+ 異붽?</button>
+    </div>
+    <div id="noticeModalBody"></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeNoticeModal()">?リ린</button></div>
+  </div>
+</div>
+<div class="modal-bg" id="noticeEditModal">
+  <div class="modal modal-sm">
+    <h3>怨듭??ы빆</h3>
+    <div class="form-field"><label>?쒕ぉ</label><input type="text" id="noticeEditTitle" autocomplete="off"></div>
+    <div class="form-field"><label>?좎쭨</label><input type="date" id="noticeEditDate"></div>
+    <div class="form-field"><label>?댁슜</label><textarea id="noticeEditBody" rows="5" style="width:100%;resize:vertical"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeNoticeEditModal()">痍⑥냼</button>
+      <button class="btn-save-modal" onclick="saveNoticeItem()">???/button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="bulkDuesModal">
+  <div class="modal modal-sm">
+    <h3>?쇨큵 ?낃툑</h3>
+    <div class="form-field"><label>湲덉븸 (??</label><input type="number" id="bulkDueAmount" min="0" step="1000" value="50000"></div>
+    <div class="form-field"><label>?좎쭨</label><input type="date" id="bulkDueDate"></div>
+    <div class="form-field">
+      <label>誘몃궔 ?좎닔 <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(true)">?꾩껜</button> <button type="button" class="tr-btn-sm" onclick="toggleBulkDuesAll(false)">?댁젣</button></label>
+      <div class="bulk-due-list" id="bulkDuesList"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeBulkDuesModal()">痍⑥냼</button>
+      <button class="btn-save-modal" onclick="saveBulkDues()">???/button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="exemptionModal">
+  <div class="modal modal-sm">
+    <h3>硫댁젣 愿由?/h3>
+    <p style="font-size:12px;color:var(--text2);margin:0 0 8px">GK???먮룞 硫댁젣?낅땲??</p>
+    <div id="exemptionList"></div>
+    <div class="form-field"><label>?좎닔</label><select id="exemptPid" class="formation-select"><option value="">?좎닔 ?좏깮</option></select></div>
+    <div class="form-field"><label>?쒖옉 ??/label><input type="month" id="exemptFrom"></div>
+    <div class="form-field"><label>醫낅즺 ??/label><input type="month" id="exemptTo"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeExemptionModal()">?リ린</button>
+      <button class="btn-save-modal" onclick="saveExemption()">硫댁젣 異붽?</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="matchModal">
 
 
@@ -2302,14 +2237,7 @@
 
 
 
-        <label>등번호</label>
-
-
-
-
-
-
-
+        <label>스코어</label>
         <div class="score-row">
 
 
@@ -3190,7 +3118,7 @@
 
 
 
-<script src="data.js?v=71"></script>
+<script src="data.js?v=72"></script>
 
 
 
@@ -3198,7 +3126,7 @@
 
 
 
-<script src="api.js?v=71"></script>
+<script src="api.js?v=72"></script>
 
 
 
@@ -3206,7 +3134,7 @@
 
 
 
-<script src="app.js?v=71"></script>
+<script src="app.js?v=72"></script>
 
 
 

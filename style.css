@@ -105,6 +105,31 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .stat-medal-3 { background:linear-gradient(135deg,#cd7f32,#9a5515); color:#fff; box-shadow:0 1px 3px rgba(100,50,0,.3); }
 .stat-rank-cell { display:inline-flex; align-items:center; }
 .home-team-row { display:flex; align-items:center; gap:6px; padding:0 16px 10px; }
+.home-quick-actions { display:flex; gap:8px; padding:0 16px 14px; flex-wrap:wrap; }
+.home-quick-btn {
+  flex:1; min-width:120px; display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:10px 14px; border-radius:10px; border:1px solid var(--border);
+  background:var(--bg2); color:var(--text1); font-size:13px; font-weight:700; cursor:pointer;
+}
+.home-quick-btn:hover { background:var(--bg); border-color:var(--text2); }
+.home-schedule-card {
+  background:var(--bg); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; margin-bottom:8px;
+}
+.home-schedule-date { font-size:13px; font-weight:700; color:var(--text1); }
+.home-schedule-opp { font-size:14px; font-weight:700; margin-top:4px; }
+.home-schedule-note { font-size:12px; color:var(--text2); margin-top:4px; }
+.home-schedule-admin { margin-top:8px; display:flex; gap:6px; }
+.home-notice-item { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+.home-notice-head {
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:12px 14px; background:var(--bg); border:none; cursor:pointer; text-align:left;
+}
+.home-notice-title { font-size:14px; font-weight:700; color:var(--text1); flex:1; }
+.home-notice-date { font-size:11px; color:var(--text3); flex-shrink:0; }
+.home-notice-body { padding:0 14px 12px; font-size:13px; color:var(--text2); line-height:1.5; }
+.home-notice-admin { padding:0 14px 10px; display:flex; gap:6px; }
+.home-notice-item.open .home-notice-head { border-bottom:1px solid var(--border); }
 .home-team-name { font-size:18px; font-weight:700; flex:1; }
 .btn-team-edit { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); cursor:pointer; font-size:13px; }
 .btn-team-edit:hover { background:var(--bg2); }
@@ -583,7 +608,7 @@ body.presentation-mode .btn-bench-swap { display:none !important; }
 body.presentation-mode #presentPanelLeft {
   display:flex; flex-direction:column; gap:10px;
   position:absolute; top:0; left:0;
-  width:210px; height:100%;
+  width:260px; height:100%;
   background:rgba(10,12,20,0.88);
   backdrop-filter:blur(10px);
   border-right:1px solid rgba(255,255,255,.12);
@@ -651,19 +676,23 @@ body.presentation-mode #presentPanelLeft {
 .pp-bench-list .bench-player-ovr { font-size:calc(10px * var(--ps-bench,1)); color:#60a5fa; margin-left:4px; }
 .pp-bench-list .btn-bench-swap { display:none !important; }
 
-/* 패널 크기 스케일 (--ps-panel) */
+/* 패널 크기 스케일 (좌/우 분리) */
 body.presentation-mode #presentPanel .pp-block-title,
-body.presentation-mode #presentPanelLeft .pp-block-title,
-body.presentation-mode #presentPanelLeft .pp-block-title-row span {
-  font-size:calc(11px * var(--ps-panel, 1.2)) !important;
-}
 body.presentation-mode #presentPanel .pp-label,
 body.presentation-mode #presentPanel .pp-val,
 body.presentation-mode #presentPanel .pp-row,
 body.presentation-mode #presentPanel .pp-name {
-  font-size:calc(11px * var(--ps-panel, 1.2)) !important;
+  font-size:calc(11px * var(--ps-panel-right, 1)) !important;
 }
-body.presentation-mode #presentPanel .pp-btn { width:calc(24px * var(--ps-panel,1.2)); height:calc(24px * var(--ps-panel,1.2)); }
+body.presentation-mode #presentPanel .pp-btn { width:calc(24px * var(--ps-panel-right,1)); height:calc(24px * var(--ps-panel-right,1)); }
+body.presentation-mode #presentPanelLeft .pp-block-title,
+body.presentation-mode #presentPanelLeft .pp-block-title-row span {
+  font-size:calc(11px * var(--ps-panel-left, 1.2)) !important;
+}
+.pp-bench-list .bench-pos-tag {
+  font-size:calc(10px * var(--ps-bench,1)); color:rgba(255,255,255,.55);
+  margin-left:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px;
+}
 
 /* 선수 가치 뱃지 (명단 탭) */
 .player-value-badge {
@@ -732,6 +761,25 @@ body.presentation-mode #presentQuarterBtns .quarter-btn {
   gap: 20px;
   -webkit-overflow-scrolling: touch;
 }
+.tr-month-filter {
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+  padding:12px 14px; background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+}
+.tr-month-filter label { font-size:13px; font-weight:600; color:var(--text2); }
+.tr-month-filter input[type="month"] {
+  padding:6px 10px; border:1px solid var(--border); border-radius:8px;
+  background:var(--bg); font-size:13px;
+}
+.tr-status-paid td { background:rgba(22,163,74,.08); }
+.tr-status-unpaid td { background:rgba(220,38,38,.06); }
+.tr-status-exempt td { background:rgba(100,116,139,.08); }
+.tr-status-paid td:nth-child(2) { color:#16a34a; font-weight:700; }
+.tr-status-unpaid td:nth-child(2) { color:#dc2626; font-weight:700; }
+.tr-status-exempt td:nth-child(2) { color:#64748b; font-weight:700; }
+.tr-memo-flag { color:#ca8a04; cursor:pointer; margin-right:4px; font-size:11px; }
+.bulk-due-row { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:14px; cursor:pointer; }
+.bulk-due-list { max-height:240px; overflow-y:auto; margin:8px 0; }
+.exemption-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
 
 /* 스크롤 박스 (입금·정산 기록) */
 .tr-scroll-box {

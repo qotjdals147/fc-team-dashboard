@@ -1,6 +1,6 @@
 // ── 프레젠테이션 모드 ──
 let presentMode = false;
-let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1, panel: 1.2 };
+let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1, panelLeft: 1.2, panelRight: 1 };
 let availPanelCollapsed = false;
 function togglePresentMode() {
   if (!isAdmin) return;
@@ -42,15 +42,14 @@ function applyPresentScales() {
   root.style.setProperty('--ps-bench',   String(presentScales.bench   || 1));
   root.style.setProperty('--ps-avail',   String(presentScales.avail   || 1));
   root.style.setProperty('--ps-quarter', String(presentScales.quarter || 1));
-  root.style.setProperty('--ps-panel',   String(presentScales.panel   || 1.2));
-  // val 표시
-  const map = { token:'psToken', bench:'psBench', avail:'psAvail', quarter:'psQuarter', panel:'psPanel' };
-  for (const [k, id] of Object.entries(map)) {
+  root.style.setProperty('--ps-panel-left',  String(presentScales.panelLeft  || 1.2));
+  root.style.setProperty('--ps-panel-right', String(presentScales.panelRight || 1));
+  const mapR = { token:'psToken', quarter:'psQuarter', panelRight:'psPanel' };
+  for (const [k, id] of Object.entries(mapR)) {
     const el = document.getElementById(id);
     if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
   }
-  // 왼쪽 패널 표시도 동기화
-  const mapL = { bench:'psBenchL', avail:'psAvailL', panel:'psPanelL' };
+  const mapL = { bench:'psBenchL', avail:'psAvailL', panelLeft:'psPanelL' };
   for (const [k, id] of Object.entries(mapL)) {
     const el = document.getElementById(id);
     if (el) el.textContent = Math.round((presentScales[k] || 1) * 100) + '%';
@@ -376,6 +375,8 @@ function computePlayerTotalWage(pid) {
 }
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
 let dues = [], expenses = [], settlements = [];
+let schedules = [], notices = [], dueExemptions = [], dueMemos = [];
+let trFilterYearMonth = null;
 let cachedFormation = '';
 let photoTransform = { x: 0, y: 0, scale: 1 };
 let matchParticipants = [];
@@ -510,13 +511,22 @@ function switchQuarter(q) {
     tokens: JSON.parse(JSON.stringify(fieldTokens))
   };
   activeQuarter = q;
-  const qd = quarterData[q];
+  let qd = quarterData[q];
+  if (!qd || (!qd.tokens?.length && !qd.formation)) {
+    const prev = quarterData[q - 1];
+    if (q > 1 && prev && (prev.tokens?.length || prev.formation)) {
+      qd = {
+        formation: prev.formation || '',
+        tokens: JSON.parse(JSON.stringify(prev.tokens || [])),
+      };
+      quarterData[q] = qd;
+    }
+  }
   if (qd && (qd.tokens?.length || qd.formation)) {
     fieldTokens = normalizeFieldTokens(qd.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}));
     setFormationSelect(qd.formation || '');
     if (qd.formation) reconcileFieldTokensToFormation();
   } else {
-    // 빈 쿼터 - 필드 초기화
     fieldTokens = [];
     setFormationSelect('');
   }
@@ -718,6 +728,10 @@ function applyRemoteData(data) {
   dues        = normalizeDuesDates(data.dues || []);
   expenses    = normalizeExpenseDates(data.expenses || []);
   settlements = normalizeSettlementDates(data.settlements || []);
+  schedules     = normalizeScheduleDates(data.schedules || []);
+  notices       = normalizeNoticeDates(data.notices || []);
+  dueExemptions = normalizeExemptionMonths(data.dueExemptions || []);
+  dueMemos      = (data.dueMemos || []).map(m => ({ ...m, yearMonth: m.yearMonth || '' }));
   if (cleanupTreasurerData()) {
     persistExpenses().catch(() => {});
     persistSettlements().catch(() => {});
@@ -752,7 +766,11 @@ function applyRemoteData(data) {
   // 프레젠테이션 스케일
   const rawPS = data.meta?.presentScales;
   if (rawPS) {
-    try { presentScales = { ...presentScales, ...(typeof rawPS === 'string' ? JSON.parse(rawPS) : rawPS) }; } catch(e) {}
+    try {
+      const ps = typeof rawPS === 'string' ? JSON.parse(rawPS) : rawPS;
+      presentScales = { ...presentScales, ...ps };
+      if (ps.panel != null && ps.panelLeft == null) presentScales.panelLeft = ps.panel;
+    } catch(e) {}
   }
   // formationSaves 마이그레이션 (구형식 → q1, 포지션 마이그레이션)
   formationSaves = (data.saves || []).map(sv => {
@@ -861,6 +879,10 @@ function loadLocalFallback() {
   dues        = normalizeDuesDates(JSON.parse(localStorage.getItem('fc_dues')        || '[]'));
   expenses    = normalizeExpenseDates(JSON.parse(localStorage.getItem('fc_expenses')    || '[]'));
   settlements = normalizeSettlementDates(JSON.parse(localStorage.getItem('fc_settlements') || '[]'));
+  schedules     = normalizeScheduleDates(JSON.parse(localStorage.getItem('fc_schedules')     || '[]'));
+  notices       = normalizeNoticeDates(JSON.parse(localStorage.getItem('fc_notices')       || '[]'));
+  dueExemptions = normalizeExemptionMonths(JSON.parse(localStorage.getItem('fc_due_exemptions') || '[]'));
+  dueMemos      = JSON.parse(localStorage.getItem('fc_due_memos') || '[]');
   cleanupTreasurerData();
   loadFieldState();
 }
@@ -906,6 +928,7 @@ async function bootstrapApp() {
   // 초기 관리자·총무 모드 적용 (새로고침 시 항상 비로그인)
   applyAdminMode();
   applyTreasurerMode();
+  checkNewNoticeAlert();
   // 30초마다 자동 갱신 시작
   startPolling();
 }
@@ -1190,6 +1213,164 @@ function renderHome() {
 }
 function refreshHomeIfVisible() {
   if (document.getElementById('tab-home')?.classList.contains('active')) renderHome();
+}
+
+// ── 경기 일정 ──
+async function persistSchedules() {
+  await apiSavePartial({ schedules });
+  localStorage.setItem('fc_schedules', JSON.stringify(schedules));
+}
+function openScheduleModal() {
+  renderScheduleModalContent();
+  document.getElementById('scheduleModal').classList.add('open');
+}
+function closeScheduleModal() {
+  document.getElementById('scheduleModal').classList.remove('open');
+}
+function renderScheduleModalContent() {
+  const el = document.getElementById('scheduleModalBody');
+  if (!el) return;
+  const sorted = schedules.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = sorted.filter(s => (s.date || '') >= today);
+  const cards = (upcoming.length ? upcoming : sorted).map(s => `
+    <div class="home-schedule-card">
+      <div class="home-schedule-date">${formatDateDisplay(s.date)}${s.time ? ' ' + s.time : ''}</div>
+      <div class="home-schedule-opp">vs ${s.opponent || '-'}</div>
+      ${s.note ? `<div class="home-schedule-note">${s.note}</div>` : ''}
+      ${isAdmin ? `<div class="home-schedule-admin">
+        <button class="tr-btn-sm" onclick="editSchedule(${s.id})">\uC218\uC815</button>
+        <button class="tr-btn-sm danger" onclick="deleteSchedule(${s.id})">\uC0AD\uC81C</button>
+      </div>` : ''}
+    </div>`).join('');
+  el.innerHTML = cards || '<div class="tr-empty">\uB4F1\uB85D\uB41C \uACBD\uAE30 \uC77C\uC815\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+  const addBtn = document.getElementById('scheduleAddBtn');
+  if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+}
+let editingScheduleId = null;
+function openScheduleEditModal(id) {
+  editingScheduleId = id || null;
+  const s = id ? schedules.find(x => x.id == id) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('schedDate').value = normalizeDate(s?.date) || today;
+  document.getElementById('schedTime').value = s?.time || '';
+  document.getElementById('schedOpponent').value = s?.opponent || '';
+  document.getElementById('schedNote').value = s?.note || '';
+  document.getElementById('scheduleEditModal').classList.add('open');
+}
+function editSchedule(id) { openScheduleEditModal(id); }
+function closeScheduleEditModal() {
+  document.getElementById('scheduleEditModal').classList.remove('open');
+}
+function saveScheduleItem() {
+  const date = normalizeDate(document.getElementById('schedDate').value);
+  const time = document.getElementById('schedTime').value.trim();
+  const opponent = document.getElementById('schedOpponent').value.trim();
+  const note = document.getElementById('schedNote').value.trim();
+  if (!date || !opponent) { alert('\uB0A0\uC9DC\uC640 \uC0C1\uB300 \uD300\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+  const item = { date, time, opponent, note };
+  if (editingScheduleId) {
+    const idx = schedules.findIndex(x => x.id == editingScheduleId);
+    if (idx >= 0) schedules[idx] = { ...schedules[idx], ...item };
+  } else {
+    schedules.push({ id: Date.now(), ...item });
+  }
+  closeScheduleEditModal();
+  persistSchedules().catch(handleSaveError);
+  renderScheduleModalContent();
+}
+function deleteSchedule(id) {
+  if (!confirm('\uC774 \uACBD\uAE30 \uC77C\uC815\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
+  schedules = schedules.filter(s => s.id != id);
+  persistSchedules().catch(handleSaveError);
+  renderScheduleModalContent();
+}
+
+// ── 공지사항 ──
+let openNoticeId = null;
+async function persistNotices() {
+  await apiSavePartial({ notices });
+  localStorage.setItem('fc_notices', JSON.stringify(notices));
+}
+function openNoticeModal() {
+  const today = new Date().toISOString().slice(0, 10);
+  localStorage.setItem('fc_notice_opened_date', today);
+  renderNoticeModalContent();
+  document.getElementById('noticeModal').classList.add('open');
+}
+function closeNoticeModal() {
+  document.getElementById('noticeModal').classList.remove('open');
+}
+function renderNoticeModalContent() {
+  const el = document.getElementById('noticeModalBody');
+  if (!el) return;
+  const sorted = notices.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  el.innerHTML = sorted.map(n => {
+    const open = openNoticeId == n.id;
+    return `<div class="home-notice-item ${open ? 'open' : ''}">
+      <button type="button" class="home-notice-head" onclick="toggleNoticeItem(${n.id})">
+        <span class="home-notice-title">${n.title || '\uC81C\uBAA9 \uC5C6\uC74C'}</span>
+        <span class="home-notice-date">${formatDateDisplay(n.date)}</span>
+      </button>
+      ${open ? `<div class="home-notice-body">${(n.body || '').replace(/\n/g, '<br>')}</div>` : ''}
+      ${isAdmin ? `<div class="home-notice-admin">
+        <button class="tr-btn-sm" onclick="editNotice(${n.id})">\uC218\uC815</button>
+        <button class="tr-btn-sm danger" onclick="deleteNotice(${n.id})">\uC0AD\uC81C</button>
+      </div>` : ''}
+    </div>`;
+  }).join('') || '<div class="tr-empty">\uB4F1\uB85D\uB41C \uACF5\uC9C0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+  const addBtn = document.getElementById('noticeAddBtn');
+  if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+}
+function toggleNoticeItem(id) {
+  openNoticeId = openNoticeId == id ? null : id;
+  renderNoticeModalContent();
+}
+let editingNoticeId = null;
+function openNoticeEditModal(id) {
+  editingNoticeId = id || null;
+  const n = id ? notices.find(x => x.id == id) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('noticeEditTitle').value = n?.title || '';
+  document.getElementById('noticeEditBody').value = n?.body || '';
+  document.getElementById('noticeEditDate').value = normalizeDate(n?.date) || today;
+  document.getElementById('noticeEditModal').classList.add('open');
+}
+function editNotice(id) { openNoticeEditModal(id); }
+function closeNoticeEditModal() {
+  document.getElementById('noticeEditModal').classList.remove('open');
+}
+function saveNoticeItem() {
+  const title = document.getElementById('noticeEditTitle').value.trim();
+  const body = document.getElementById('noticeEditBody').value.trim();
+  const date = normalizeDate(document.getElementById('noticeEditDate').value);
+  if (!title || !body || !date) { alert('\uC81C\uBAA9\u00B7\uB0B4\uC6A9\u00B7\uB0A0\uC9DC\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
+  const item = { title, body, date, createdAt: date };
+  if (editingNoticeId) {
+    const idx = notices.findIndex(x => x.id == editingNoticeId);
+    if (idx >= 0) notices[idx] = { ...notices[idx], ...item };
+  } else {
+    notices.push({ id: Date.now(), ...item });
+  }
+  closeNoticeEditModal();
+  persistNotices().catch(handleSaveError);
+  renderNoticeModalContent();
+}
+function deleteNotice(id) {
+  if (!confirm('\uC774 \uACF5\uC9C0\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
+  notices = notices.filter(n => n.id != id);
+  if (openNoticeId == id) openNoticeId = null;
+  persistNotices().catch(handleSaveError);
+  renderNoticeModalContent();
+}
+function checkNewNoticeAlert() {
+  if (isAdmin) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem('fc_notice_opened_date') === today) return;
+  const count = notices.filter(n => normalizeDate(n.date) === today).length;
+  if (count > 0) {
+    alert(`\uC624\uB298\uC758 \uC0C8 \uACF5\uC9C0\uAC00 ${count}\uAC74 \uC788\uC2B5\uB2C8\uB2E4.\n\u300C\uACF5\uC9C0\uC0AC\uD56D\u300D\uC5D0\uC11C \uD655\uC778\uD574 \uC8FC\uC138\uC694.`);
+  }
 }
 function openPhotoUrlModal() {
   for (let i = 0; i < 5; i++) {
@@ -2350,6 +2531,14 @@ function onGlobalUp(e){
   }
 }
 
+function formatBenchPosTag(p) {
+  if (!p.positions?.length) return '';
+  const primary = primaryPos(p) || '';
+  const secondary = p.positions.filter(pos => pos !== primary).join(',');
+  const label = secondary ? `${primary} \u00B7 ${secondary}` : primary;
+  return `<span class="bench-pos-tag">${label}</span>`;
+}
+
 function renderBench(){
   const onField=fieldTokens.map(t=>t.pid);
   const bench=players.filter(p=>{
@@ -2373,7 +2562,8 @@ function renderBench(){
     wrap.className='bench-item';
     const div=document.createElement('div');
     div.className='bench-player';div.dataset.pid=p.id;
-    div.innerHTML=`<div class="dot" style="background:${primaryPosColor(p)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${eff!=null?`<span class="bench-player-ovr">${eff}</span>`:''}`;
+    const posTag = presentMode ? formatBenchPosTag(p) : '';
+    div.innerHTML=`<div class="dot" style="background:${primaryPosColor(p)}"></div>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${posTag}${eff!=null?`<span class="bench-player-ovr">${eff}</span>`:''}`;
     div.addEventListener('mousedown',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.clientX,e.clientY,this);});
     div.addEventListener('touchstart',function(e){if(!isAdmin)return;e.preventDefault();startDrag(p.id,true,e.touches[0].clientX,e.touches[0].clientY,this);},{passive:false});
     wrap.appendChild(div);
@@ -2852,7 +3042,7 @@ function deleteMatch(id){
 function renderRecords(){
   const el=document.getElementById('recordsContent');
   if(!matches.length){el.innerHTML='<div class="empty-state">기록된 경기가 없습니다</div>';return;}
-  el.innerHTML=matches.map(m=>{
+  el.innerHTML=matches.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>{
     const res=m.scoreUs>m.scoreOpp?'🏆 승':m.scoreUs===m.scoreOpp?'🤝 무':'💔 패';
     const cardCls=m.scoreUs>m.scoreOpp?'win':m.scoreUs===m.scoreOpp?'draw':'lose';
 
@@ -3223,22 +3413,90 @@ function computeUnsettledWage(pid, from, to) {
 // 대시보드 숫자 포맷
 function fmtMoney(n) { return (n||0).toLocaleString() + '\uC6D0'; }
 
+function getTrYearMonth() {
+  return trFilterYearMonth || currentYearMonth();
+}
+function setTrMonthFilter(ym) {
+  trFilterYearMonth = ym || currentYearMonth();
+  renderTreasurer();
+}
+function isGkPlayer(p) {
+  return !!(p.positions && p.positions.includes('GK'));
+}
+function isPlayerExempt(pid, ym) {
+  const p = players.find(pl => pl.id == pid);
+  if (p && isGkPlayer(p)) return true;
+  return dueExemptions.some(ex => ex.pid == pid && ym >= ex.fromMonth && ym <= ex.toMonth);
+}
+function getPaymentStatus(pid, ym) {
+  if (isPlayerExempt(pid, ym)) return 'exempt';
+  const paid = dues.some(d => d.pid == pid && d.type === DUE_TYPE_PAYMENT && yearMonthFromDate(d.date) === ym);
+  return paid ? 'paid' : 'unpaid';
+}
+function getDueMemo(pid, ym) {
+  return dueMemos.find(m => m.pid == pid && m.yearMonth === ym);
+}
+function paymentStatusLabel(st) {
+  if (st === 'paid') return '\uB0A9\uBD80';
+  if (st === 'exempt') return '\uBA74\uC81C';
+  return '\uBBF8\uB0A9';
+}
+function filterDuesByMonth(list, ym) {
+  return list.filter(d => yearMonthFromDate(d.date) === ym);
+}
+function filterExpensesByMonth(list, ym) {
+  return list.filter(e => yearMonthFromDate(e.date) === ym);
+}
+
+async function persistDueExemptions() {
+  await apiSavePartial({ dueExemptions });
+  localStorage.setItem('fc_due_exemptions', JSON.stringify(dueExemptions));
+}
+async function persistDueMemos() {
+  await apiSavePartial({ dueMemos });
+  localStorage.setItem('fc_due_memos', JSON.stringify(dueMemos));
+}
+
+function editDueMemo(pid) {
+  const ym = getTrYearMonth();
+  const existing = getDueMemo(pid, ym);
+  const p = players.find(pl => pl.id == pid);
+  const name = p ? p.name : ('#' + pid);
+  const note = prompt(`${formatYearMonthDisplay(ym)} ${name} \uBA54\uBAA8`, existing?.note || '');
+  if (note === null) return;
+  const trimmed = note.trim();
+  const idx = dueMemos.findIndex(m => m.pid == pid && m.yearMonth === ym);
+  if (!trimmed) {
+    if (idx >= 0) dueMemos.splice(idx, 1);
+  } else if (idx >= 0) {
+    dueMemos[idx].note = trimmed;
+  } else {
+    dueMemos.push({ id: Date.now(), pid, yearMonth: ym, note: trimmed });
+  }
+  persistDueMemos().catch(handleSaveError);
+  renderTreasurer();
+}
+
 // ── 총무 탭 전체 렌더 ──
 function renderTreasurer() {
   const wrap = document.getElementById('tab-treasurer');
   if (!wrap) return;
 
-  // 요약 계산
-  const totalIncome   = dues.filter(d => d.type !== 'refund').reduce((s, d) => s + (d.amount || 0), 0);
-  const totalExpense  = expenses.filter(e => e.status !== 'cancelled').reduce((s, e) => s + (e.amount || 0), 0);
-  const balance       = totalIncome - totalExpense;
+  const ym = getTrYearMonth();
+  const monthDues = filterDuesByMonth(dues.filter(d => d.type !== 'refund'), ym);
+  const monthExpenses = filterExpensesByMonth(expenses.filter(e => e.status !== 'cancelled'), ym);
+
+  const totalIncome   = monthDues.reduce((s, d) => s + (d.amount || 0), 0);
+  const totalExpense  = monthExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const allIncome     = dues.filter(d => d.type !== 'refund').reduce((s, d) => s + (d.amount || 0), 0);
+  const allExpense    = expenses.filter(e => e.status !== 'cancelled').reduce((s, e) => s + (e.amount || 0), 0);
+  const balance       = allIncome - allExpense;
   const budgetLow     = Math.round(balance * 0.2);
   const budgetHigh    = Math.round(balance * 0.3);
 
-  // 선수별 회비 요약
   const duesByPid = {};
-  dues.forEach(d => {
-    if (d.type !== DUE_TYPE_PAYMENT || !d.pid || d.type === 'refund') return;
+  monthDues.forEach(d => {
+    if (d.type !== DUE_TYPE_PAYMENT || !d.pid) return;
     if (!duesByPid[d.pid]) duesByPid[d.pid] = { count: 0, total: 0 };
     duesByPid[d.pid].count++;
     duesByPid[d.pid].total += (d.amount || 0);
@@ -3246,25 +3504,23 @@ function renderTreasurer() {
 
   const regularPlayers = players.filter(p => !p.isMercenary);
 
-  // 미납 경고 (3개월 이상 입금 없는 선수)
-  const now = new Date();
-  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth()-3, now.getDate()).toISOString().slice(0,10);
-  const warnPids = new Set(
-    regularPlayers.filter(p => {
-      const lastDate = dues.filter(d => d.pid == p.id && d.type === DUE_TYPE_PAYMENT).map(d => normalizeDate(d.date)).sort().at(-1);
-      return !lastDate || lastDate < threeMonthsAgo;
-    }).map(p => p.id)
-  );
-
   wrap.innerHTML = `
 <div class="tr-page">
+
+  <div class="tr-month-filter">
+    <label>\uAE30\uC900 \uB144\uC6D4</label>
+    <input type="month" id="trMonthFilter" value="${ym}" onchange="setTrMonthFilter(this.value)">
+    <button class="tr-btn-sm" onclick="exportTreasurerReceipt()">\uC601\uC218\uC99D</button>
+    <button class="tr-btn-sm" onclick="openBulkDuesModal()">\uC77C\uAD04 \uC785\uAE08</button>
+    <button class="tr-btn-sm" onclick="openExemptionModal()">\uBA74\uC81C \uAD00\uB9AC</button>
+  </div>
 
   <!-- ① 요약 대시보드 -->
   <div class="tr-section">
     <div class="tr-section-title">\uD83D\uDCCA \uC694\uC57D \uB300\uC2DC\uBCF4\uB4DC</div>
     <div class="tr-cards tr-cards-vertical">
-      <div class="tr-card"><div class="tr-card-label">\uCD1D \uD68C\uBE44 \uC218\uC785</div><div class="tr-card-value income">${fmtMoney(totalIncome)}</div></div>
-      <div class="tr-card"><div class="tr-card-label">\uCD1D \uC9C0\uCD9C</div><div class="tr-card-value expense">${fmtMoney(totalExpense)}</div></div>
+      <div class="tr-card"><div class="tr-card-label">${formatYearMonthDisplay(ym)} \uC218\uC785</div><div class="tr-card-value income">${fmtMoney(totalIncome)}</div></div>
+      <div class="tr-card"><div class="tr-card-label">${formatYearMonthDisplay(ym)} \uC9C0\uCD9C</div><div class="tr-card-value expense">${fmtMoney(totalExpense)}</div></div>
       <div class="tr-card"><div class="tr-card-label">\uD604\uC7AC \uC794\uC561</div><div class="tr-card-value balance">${fmtMoney(balance)}</div></div>
       <div class="tr-card"><div class="tr-card-label">\uC5F0\uB9D0 \uACB0\uC0B0 \uAC00\uB2A5 \uC608\uC0B0</div><div class="tr-card-value budget">${fmtMoney(budgetLow)} ~ ${fmtMoney(budgetHigh)}</div></div>
     </div>
@@ -3278,19 +3534,26 @@ function renderTreasurer() {
     </div>
     <div class="tr-table-wrap">
       <table class="tr-table">
-        <thead><tr><th>\uC120\uC218</th><th>\uB0A9\uBD80\uD69F\uC218</th><th>\uD569\uACC4</th></tr></thead>
+        <thead><tr><th>\uC120\uC218</th><th>\uC0C1\uD0DC</th><th>\uD569\uACC4</th><th>\uBA54\uBAA8</th></tr></thead>
         <tbody>
           ${regularPlayers.sort((a,b)=>(a.jersey??99)-(b.jersey??99)).map(p => {
             const d = duesByPid[p.id] || {count:0,total:0};
-            const warn = warnPids.has(p.id) ? ' tr-warn' : '';
-            return `<tr class="${warn}"><td>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}${warn?' \u26A0\uFE0F':''}</td><td>${d.count}\uD68C</td><td>${fmtMoney(d.total)}</td></tr>`;
+            const st = getPaymentStatus(p.id, ym);
+            const memo = getDueMemo(p.id, ym);
+            const rowCls = st === 'paid' ? 'tr-status-paid' : st === 'exempt' ? 'tr-status-exempt' : 'tr-status-unpaid';
+            return `<tr class="${rowCls}">
+              <td>${p.jersey!=null?'#'+p.jersey+' ':''}${p.name}</td>
+              <td>${paymentStatusLabel(st)}</td>
+              <td>${fmtMoney(d.total)}</td>
+              <td class="tr-memo-cell">${memo ? `<span class="tr-memo-flag" title="${memo.note.replace(/"/g,'&quot;')}" onclick="editDueMemo(${p.id})">\u25E4</span> ${memo.note}` : `<button class="tr-btn-sm" onclick="editDueMemo(${p.id})">+</button>`}</td>
+            </tr>`;
           }).join('')}
         </tbody>
       </table>
     </div>
     <div class="tr-subsection-title">\uC804\uCCB4 \uC785\uAE08 \uAE30\uB85D</div>
     <div class="tr-scroll-box" id="trDuesList">
-      ${renderDuesList()}
+      ${renderDuesList(ym)}
     </div>
   </div>
 
@@ -3304,7 +3567,7 @@ function renderTreasurer() {
       <table class="tr-table">
         <thead><tr><th>\uB0A0\uC9DC</th><th>\uC0AC\uC6A9\uCC98</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th>\uC720\uD615</th><th></th></tr></thead>
         <tbody>
-          ${expenses.filter(e => e.status !== 'cancelled').slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ex => {
+          ${monthExpenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ex => {
             const isSettle = !!ex.settlementId;
             const catLabel = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : (ex.category || '');
             const typeLabel = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : '\uC9C0\uCD9C';
@@ -3359,8 +3622,8 @@ function renderTreasurer() {
   if (toEl   && !toEl.value)   toEl.value   = today;
 }
 
-function renderDuesList() {
-  const rows = dues.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+function renderDuesList(ym) {
+  const rows = filterDuesByMonth(dues, ym || getTrYearMonth()).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   if (!rows.length) return '<div class="tr-empty">\uC785\uAE08 \uAE30\uB85D \uC5C6\uC74C</div>';
   return `<div class="tr-table-wrap">
     <table class="tr-table">
@@ -3613,6 +3876,155 @@ function executeSingleSettlement(pid, from, to) {
   renderTreasurer();
 }
 
+// ── 일괄 입금 ──
+function openBulkDuesModal() {
+  const ym = getTrYearMonth();
+  const list = document.getElementById('bulkDuesList');
+  if (!list) return;
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('bulkDueDate').value = today;
+  document.getElementById('bulkDueAmount').value = document.getElementById('bulkDueAmount').value || '50000';
+  const unpaid = players.filter(p => !p.isMercenary && getPaymentStatus(p.id, ym) === 'unpaid')
+    .sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99));
+  list.innerHTML = unpaid.length
+    ? unpaid.map(p => `<label class="bulk-due-row"><input type="checkbox" class="bulk-due-cb" value="${p.id}" checked> ${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</label>`).join('')
+    : '<div class="tr-empty">\uBBF8\uB0A9 \uC120\uC218\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+  document.getElementById('bulkDuesModal').classList.add('open');
+}
+function closeBulkDuesModal() {
+  document.getElementById('bulkDuesModal')?.classList.remove('open');
+}
+function toggleBulkDuesAll(checked) {
+  document.querySelectorAll('.bulk-due-cb').forEach(cb => { cb.checked = checked; });
+}
+function saveBulkDues() {
+  const amount = parseInt(document.getElementById('bulkDueAmount').value, 10);
+  const date = normalizeDate(document.getElementById('bulkDueDate').value);
+  const pids = [...document.querySelectorAll('.bulk-due-cb:checked')].map(cb => parseInt(cb.value, 10));
+  if (!amount || !date) { alert('\uAE08\uC561\u00B7\uB0A0\uC9DC\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
+  if (!pids.length) { alert('\uC120\uC218\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694'); return; }
+  const ym = getTrYearMonth();
+  const note = `${formatYearMonthDisplay(ym)} \uD68C\uBE44`;
+  pids.forEach(pid => {
+    dues.push({ id: Date.now() + Math.random(), pid, amount, date, note, type: DUE_TYPE_PAYMENT });
+  });
+  closeBulkDuesModal();
+  persistDues().catch(handleSaveError);
+  renderTreasurer();
+}
+
+// ── 면제 관리 ──
+function openExemptionModal() {
+  renderExemptionList();
+  document.getElementById('exemptionModal').classList.add('open');
+}
+function closeExemptionModal() {
+  document.getElementById('exemptionModal')?.classList.remove('open');
+}
+function renderExemptionList() {
+  const el = document.getElementById('exemptionList');
+  if (!el) return;
+  const rows = dueExemptions.slice().sort((a, b) => (b.fromMonth || '').localeCompare(a.fromMonth || ''));
+  el.innerHTML = rows.length ? rows.map(ex => {
+    const p = players.find(pl => pl.id == ex.pid);
+    const name = p ? (p.jersey != null ? '#' + p.jersey + ' ' : '') + p.name : ('#' + ex.pid);
+    return `<div class="exemption-row">
+      <span>${name} · ${formatYearMonthDisplay(ex.fromMonth)} ~ ${formatYearMonthDisplay(ex.toMonth)}</span>
+      <button class="tr-btn-sm danger" onclick="deleteExemption(${ex.id})">\uC0AD\uC81C</button>
+    </div>`;
+  }).join('') : '<div class="tr-empty">\uB4F1\uB85D\uB41C \uBA74\uC81C \uAE30\uAC04\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. (GK\uB294 \uC790\uB3D9 \uBA74\uC81C)</div>';
+  const sel = document.getElementById('exemptPid');
+  if (sel) {
+    sel.innerHTML = '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
+      players.filter(p => !p.isMercenary && !isGkPlayer(p)).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
+        .map(p => `<option value="${p.id}">${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`).join('');
+  }
+}
+function saveExemption() {
+  const pid = parseInt(document.getElementById('exemptPid').value, 10);
+  const fromMonth = document.getElementById('exemptFrom').value;
+  const toMonth = document.getElementById('exemptTo').value;
+  if (!pid || !fromMonth || !toMonth) { alert('\uC120\uC218\u00B7\uAE30\uAC04\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+  if (fromMonth > toMonth) { alert('\uC2DC\uC791 \uC6D4\uC774 \uC885\uB8CC \uC6D4\uBCF4\uB2E4 \uB192\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
+  dueExemptions.push({ id: Date.now(), pid, fromMonth, toMonth });
+  document.getElementById('exemptPid').value = '';
+  persistDueExemptions().catch(handleSaveError);
+  renderExemptionList();
+  renderTreasurer();
+}
+function deleteExemption(id) {
+  if (!confirm('\uC774 \uBA74\uC81C \uAE30\uAC04\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
+  dueExemptions = dueExemptions.filter(ex => ex.id != id);
+  persistDueExemptions().catch(handleSaveError);
+  renderExemptionList();
+  renderTreasurer();
+}
+
+// ── 지출 영수증 이미지 ──
+async function exportTreasurerReceipt() {
+  const ym = getTrYearMonth();
+  const monthExpenses = filterExpensesByMonth(expenses.filter(e => e.status !== 'cancelled'), ym)
+    .slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const totalExpense = monthExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const sc = 2;
+  const pad = 16 * sc;
+  const lineH = 22 * sc;
+  const headerH = 56 * sc;
+  const rowH = 20 * sc;
+  const tableH = Math.max(rowH, monthExpenses.length * rowH + lineH);
+  const canvas = document.createElement('canvas');
+  canvas.width = 360 * sc + pad * 2;
+  canvas.height = headerH + lineH + tableH + pad * 2 + 24 * sc;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#141412';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const team = myTeamName || '\uC6B0\uB9AC FC';
+  ctx.fillStyle = '#f0f0ee';
+  ctx.font = `bold ${15 * sc}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`\uD83D\uDCCB ${team} \uC9C0\uCD9C \uC601\uC218\uC99D`, pad, headerH / 2 - 8 * sc);
+  ctx.fillStyle = '#a0a09d';
+  ctx.font = `${11 * sc}px sans-serif`;
+  ctx.fillText(`${formatYearMonthDisplay(ym)} \u00B7 \uCD1D ${fmtMoney(totalExpense)}`, pad, headerH / 2 + 10 * sc);
+  let y = headerH + pad;
+  ctx.fillStyle = '#888';
+  ctx.font = `600 ${9 * sc}px sans-serif`;
+  ctx.fillText('\uB0A0\uC9DC', pad, y);
+  ctx.fillText('\uC0AC\uC6A9\uCC98', pad + 72 * sc, y);
+  ctx.fillText('\uAE08\uC561', pad + 200 * sc, y);
+  y += lineH;
+  ctx.strokeStyle = 'rgba(255,255,255,.15)';
+  ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(canvas.width - pad, y); ctx.stroke();
+  y += 8 * sc;
+  ctx.font = `${10 * sc}px sans-serif`;
+  monthExpenses.forEach(ex => {
+    const isSettle = !!ex.settlementId;
+    const cat = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : (ex.category || '-');
+    ctx.fillStyle = '#d0d0cd';
+    ctx.fillText(formatDateDisplay(ex.date).slice(5), pad, y);
+    ctx.fillText(cat.slice(0, 12), pad + 72 * sc, y);
+    ctx.fillText(fmtMoney(ex.amount), pad + 200 * sc, y);
+    y += rowH;
+  });
+  if (!monthExpenses.length) {
+    ctx.fillStyle = '#666';
+    ctx.fillText('\uC9C0\uCD9C \uAE30\uB85D \uC5C6\uC74C', pad, y);
+  }
+  const filename = `receipt-${ym}-${team.replace(/[^\w가-힣]/g, '').slice(0, 8) || 'FC'}.png`;
+  canvas.toBlob(async blob => {
+    if (!blob) { alert('\uC774\uBBF8\uC9C0 \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4'); return; }
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `${team} ${formatYearMonthDisplay(ym)} \uC9C0\uCD9C` });
+        return;
+      } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    downloadPngBlob(blob, filename);
+  }, 'image/png');
+}
+
 function cancelSettlement(key) {
   if (!confirm('\uC774 \uC815\uC0B0\uC744 \uCDE8\uC18C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? \uC5F0\uACB0\uB41C \uC9C0\uCD9C \uAE30\uB85D\uB3C4 \uC0AD\uC81C\uB418\uBA70, \uD574\uB2F9 \uB9AC\uC6CC\uB4DC\uB294 \uB2E4\uC2DC \uBBF8\uC815\uC0B0\uC73C\uB85C \uC7A1\uD799\uB2C8\uB2E4.')) return;
   const groupId = /^\d+$/.test(key) ? Number(key) : null;
@@ -3636,6 +4048,12 @@ document.getElementById('adminOptionsModal')?.addEventListener('click',function(
 document.getElementById('pwChangeModal')?.addEventListener('click',function(e){if(e.target===this)closePwChangeModal();});
 document.getElementById('statHistoryModal')?.addEventListener('click',function(e){if(e.target===this)closeStatHistory();});
 document.getElementById('photoUrlModal')?.addEventListener('click',function(e){if(e.target===this)closePhotoUrlModal();});
+document.getElementById('scheduleModal')?.addEventListener('click',function(e){if(e.target===this)closeScheduleModal();});
+document.getElementById('scheduleEditModal')?.addEventListener('click',function(e){if(e.target===this)closeScheduleEditModal();});
+document.getElementById('noticeModal')?.addEventListener('click',function(e){if(e.target===this)closeNoticeModal();});
+document.getElementById('noticeEditModal')?.addEventListener('click',function(e){if(e.target===this)closeNoticeEditModal();});
+document.getElementById('bulkDuesModal')?.addEventListener('click',function(e){if(e.target===this)closeBulkDuesModal();});
+document.getElementById('exemptionModal')?.addEventListener('click',function(e){if(e.target===this)closeExemptionModal();});
 bootstrapApp();
 function onFieldResize(){
   if(!document.getElementById('tab-formation').classList.contains('active'))return;

@@ -104,6 +104,20 @@ function normalizeSettlementDates(list) {
     settledAt: normalizeDate(s.settledAt),
   }));
 }
+const DISCIPLINE_AMOUNTS = { 1: 1000, 2: 2000, 3: 3000 };
+function normalizeDisciplineDates(list) {
+  return (list || []).map(d => {
+    const level = Number(d.level) || 1;
+    return {
+      ...d,
+      date: normalizeDate(d.date),
+      createdAt: d.createdAt ? String(d.createdAt) : d.createdAt,
+      level,
+      amount: Number(d.amount) || DISCIPLINE_AMOUNTS[level] || 1000,
+      settlementGroupId: d.settlementGroupId != null ? d.settlementGroupId : null,
+    };
+  });
+}
 function normalizeScheduleDates(list) {
   return (list || []).map(s => ({
     ...s,

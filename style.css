@@ -488,6 +488,34 @@ body.presentation-mode .field-export-btn {
 .stat-history-score { font-weight:700; min-width:48px; }
 .stat-history-opp { flex:1; color:var(--text2); }
 .stat-history-count { font-weight:700; color:var(--info-text); }
+.stat-history-detail { flex:1; color:var(--text2); font-size:11px; }
+.stat-history-discipline { background:#fff5f5; }
+.stat-history-minus { color:#dc2626 !important; }
+.stat-history-empty { text-align:center; padding:20px; color:var(--text3); font-size:13px; }
+.value-history-total { margin-top:10px; padding-top:10px; border-top:2px solid var(--border); font-size:13px; text-align:right; }
+.value-history-sub { font-size:10px; color:var(--text3); font-weight:400; }
+.stats-discipline-btn { border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 4px; vertical-align:middle; opacity:0.7; }
+.stats-discipline-btn:hover { opacity:1; }
+.discipline-count-badge { display:inline-block; font-size:9px; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; border-radius:8px; padding:0 5px; margin-left:4px; vertical-align:middle; }
+.discipline-admin-section { margin-top:16px; border-top:1px solid var(--border); padding-top:12px; }
+.discipline-admin-title { font-size:12px; font-weight:700; color:var(--text2); margin-bottom:8px; }
+.discipline-admin-list { display:flex; flex-direction:column; gap:6px; }
+.discipline-admin-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:11px; padding:8px; background:var(--bg2); border-radius:var(--radius); }
+.discipline-admin-date { color:var(--text3); min-width:72px; }
+.discipline-admin-name { font-weight:600; min-width:60px; }
+.discipline-admin-level { color:#b45309; font-weight:600; }
+.discipline-admin-amount { color:#dc2626; font-weight:700; }
+.discipline-admin-reason { color:var(--text2); flex:1; }
+.discipline-settled-tag { font-size:9px; background:#e0e7ff; color:#3730a3; padding:1px 6px; border-radius:6px; }
+.discipline-del-btn { font-size:10px; padding:2px 8px; border:1px solid var(--danger-text); background:transparent; color:var(--danger-text); border-radius:var(--radius); cursor:pointer; }
+.stats-discipline-add-btn { flex-shrink:0; font-size:11px; padding:6px 10px; border:1px solid #dc2626; background:#fef2f2; color:#dc2626; border-radius:var(--radius); cursor:pointer; font-weight:600; white-space:nowrap; }
+.discipline-form-hint { font-size:11px; color:#b45309; margin:8px 0; padding:8px; background:#fffbeb; border-radius:var(--radius); border:1px solid #fde68a; }
+.modal-label { display:block; font-size:11px; font-weight:600; color:var(--text2); margin:10px 0 4px; }
+.modal-input { width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--border2); border-radius:var(--radius); background:var(--bg); color:var(--text); font-size:13px; }
+#disciplineModal .btn-save, #disciplineDetailModal .btn-save { flex:2; padding:11px; border-radius:var(--radius); font-size:14px; cursor:pointer; border:none; background:#dc2626; color:#fff; font-weight:600; }
+.discipline-detail-row { display:flex; flex-wrap:wrap; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.discipline-detail-minus { color:#dc2626; font-weight:700; }
+.discipline-detail-note { color:var(--text3); font-size:11px; width:100%; }
 
 /* ── 프레젠테이션 모드 ── */
 .btn-present { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.2); color:var(--text2); border-radius:var(--radius); padding:5px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all .2s; white-space:nowrap; }
@@ -1047,6 +1075,10 @@ body.presentation-mode #presentQuarterBtns .quarter-copy-arrow {
   font-weight: 600;
 }
 .tr-preview-header strong { color: var(--text); }
+.tr-settlement-detail-table { font-size: 12px; }
+.tr-discipline-cell { color: #dc2626; }
+.tr-discipline-link { border: none; background: transparent; color: #dc2626; font-weight: 700; cursor: pointer; font-size: inherit; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.tr-discipline-link:hover { color: #b91c1c; }
 .tr-warn-badge {
   background: #fef08a;
   color: #713f12;

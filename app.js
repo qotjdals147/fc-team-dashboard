@@ -367,13 +367,86 @@ function computeMatchWages(match) {
   return result;
 }
 
-// 선수의 전체 누적 선수 가치
-function computePlayerTotalWage(pid) {
+// ── 징계 (9조 8항: 불화·마찰) ──
+const DISCIPLINE_REASON_LABELS = { internal: '\uD300 \uB0B4 \uBD88\uD654', opponent: '\uC0C1\uB300\uD300 \uB9C8\uCC30', other: '\uAE30\uD0C0' };
+
+function getDisciplinesForPlayer(pid) {
+  return disciplines.filter(d => d.pid == pid).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+function getSuggestedDisciplineLevel(pid) {
+  const count = disciplines.filter(d => d.pid == pid).length;
+  return Math.min(count + 1, 3);
+}
+function disciplineReasonLabel(reason) {
+  return DISCIPLINE_REASON_LABELS[reason] || reason || '\uAE30\uD0C0';
+}
+function computeTotalDisciplineDeduction(pid) {
   if (players.find(p => p.id === pid)?.isMercenary) return 0;
+  return disciplines.filter(d => d.pid == pid).reduce((s, d) => s + (d.amount || 0), 0);
+}
+function getUnsettledDisciplinesInPeriod(pid, from, to) {
+  const fromD = from ? normalizeDate(from) : null;
+  const toD = to ? normalizeDate(to) : null;
+  return disciplines.filter(d => {
+    if (d.pid != pid || d.settlementGroupId) return false;
+    const dd = normalizeDate(d.date);
+    if (!dd) return false;
+    if (fromD && dd < fromD) return false;
+    if (toD && dd > toD) return false;
+    return true;
+  });
+}
+function computeMatchWageGross(pid, from, to, excludeSettled) {
+  if (players.find(p => p.id === pid)?.isMercenary) return 0;
+  const settled = excludeSettled ? settlements.filter(s => s.pid == pid && s.status === 'done') : [];
+  const fromD = from ? normalizeDate(from) : null;
+  const toD = to ? normalizeDate(to) : null;
   return matches.reduce((sum, m) => {
+    const md = normalizeDate(m.date);
+    if (fromD && md < fromD) return sum;
+    if (toD && md > toD) return sum;
+    if (excludeSettled && settled.some(s => md >= normalizeDate(s.startDate) && md <= normalizeDate(s.endDate))) return sum;
     const w = computeMatchWages(m);
     return sum + (w[pid]?.total || 0);
   }, 0);
+}
+function computeUnsettledWageBreakdown(pid, from, to) {
+  if (players.find(p => p.id === pid)?.isMercenary) return { gross: 0, discipline: 0, net: 0, disciplineItems: [] };
+  const gross = computeMatchWageGross(pid, from, to, true);
+  const disciplineItems = getUnsettledDisciplinesInPeriod(pid, from, to);
+  const discipline = disciplineItems.reduce((s, d) => s + (d.amount || 0), 0);
+  const net = Math.max(0, gross - discipline);
+  return { gross, discipline, net, disciplineItems };
+}
+function linkDisciplinesToSettlement(pid, from, to, groupId) {
+  const fromD = normalizeDate(from);
+  const toD = normalizeDate(to);
+  disciplines.forEach(d => {
+    if (d.pid != pid || d.settlementGroupId) return;
+    const dd = normalizeDate(d.date);
+    if (dd && dd >= fromD && dd <= toD) d.settlementGroupId = groupId;
+  });
+}
+function hasSuspensionToday(pid) {
+  const today = new Date().toISOString().slice(0, 10);
+  return disciplines.some(d => d.pid == pid && normalizeDate(d.date) === today);
+}
+function checkSuspensionWarning(pid) {
+  if (!isAdmin) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayDisc = disciplines.filter(d => d.pid == pid && normalizeDate(d.date) === today);
+  if (!todayDisc.length) return;
+  const p = players.find(x => x.id === pid);
+  const levels = todayDisc.map(d => d.level + '\uCC28').join(', ');
+  setTimeout(() => alert(`${p?.name || ''} \u2014 \uB2F9\uC77C \uCD9C\uC804 \uC815\uC9C0 (${levels} \uC9D5\uACC4)`), 50);
+}
+
+// 선수의 전체 누적 선수 가치 (경기 수당 − 징계)
+function computePlayerTotalWage(pid) {
+  if (players.find(p => p.id === pid)?.isMercenary) return 0;
+  const gross = computeMatchWageGross(pid, null, null, false);
+  const deduction = computeTotalDisciplineDeduction(pid);
+  return Math.max(0, gross - deduction);
 }
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
 
@@ -390,7 +463,7 @@ function syncAllMatchTeamNames(name) {
   });
   return changed;
 }
-let dues = [], expenses = [], settlements = [];
+let dues = [], expenses = [], settlements = [], disciplines = [];
 let schedules = [], notices = [], dueExemptions = [], dueMemos = [];
 let trFilterYearMonth = null;
 let cachedFormation = '';
@@ -803,6 +876,7 @@ function applyRemoteData(data) {
   notices       = normalizeNoticeDates(data.notices || []);
   dueExemptions = normalizeExemptionMonths(data.dueExemptions || []);
   dueMemos      = normalizeDueMemos(data.dueMemos || []);
+  disciplines   = normalizeDisciplineDates(data.disciplines || []);
   if (cleanupTreasurerData()) {
     persistExpenses().catch(() => {});
     persistSettlements().catch(() => {});
@@ -954,6 +1028,7 @@ function loadLocalFallback() {
   notices       = normalizeNoticeDates(JSON.parse(localStorage.getItem('fc_notices')       || '[]'));
   dueExemptions = normalizeExemptionMonths(JSON.parse(localStorage.getItem('fc_due_exemptions') || '[]'));
   dueMemos      = normalizeDueMemos(JSON.parse(localStorage.getItem('fc_due_memos') || '[]'));
+  disciplines   = normalizeDisciplineDates(JSON.parse(localStorage.getItem('fc_disciplines') || '[]'));
   cleanupTreasurerData();
   loadFieldState();
 }
@@ -2749,6 +2824,7 @@ function onGlobalUp(e){
       saveFieldState(); renderField(); return;
     }
     saveFieldState();renderField();
+    checkSuspensionWarning(pid);
   } else {
     refreshFieldSlots(-1);
   }
@@ -3385,9 +3461,16 @@ function renderPersonalStats(filtered) {
   const tableRows = rows.map(r => {
     const gCls = r.goals > 0 ? 'stat-click' : 'stat-click zero';
     const aCls = r.assists > 0 ? 'stat-click' : 'stat-click zero';
-    const wageDisplay = r.wage > 0 ? `<span class="stat-wage">${r.wage.toLocaleString()}&#xC6D0;</span>` : '—';
+    const discCount = getDisciplinesForPlayer(r.pid).length;
+    const hasValueHistory = r.wage > 0 || discCount > 0;
+    const wageCls = hasValueHistory ? 'stat-click stat-wage' : 'stat-click zero';
+    const wageDisplay = hasValueHistory
+      ? `<span class="${wageCls}" onclick="openValueHistory(${r.pid})">${r.wage > 0 ? r.wage.toLocaleString() + '&#xC6D0;' : '0&#xC6D0;'}</span>`
+      : '—';
+    const discBtn = isAdmin ? `<button class="stats-discipline-btn" onclick="openDisciplineModal(${r.pid})" title="\uC9D5\uACC4 \uB4F1\uB85D">\u26A0</button>` : '';
+    const discBadge = discCount ? `<span class="discipline-count-badge">${discCount}</span>` : '';
     return `<tr>
-      <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span></span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}</td>
+      <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span>${discBadge}</span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''} ${discBtn}</td>
       <td>${r.attendance}</td>
       <td><span class="${gCls}" onclick="openStatHistory(${r.pid},'goals')">${r.goals}</span></td>
       <td><span class="${aCls}" onclick="openStatHistory(${r.pid},'assists')">${r.assists}</span></td>
@@ -3395,11 +3478,13 @@ function renderPersonalStats(filtered) {
       <td>${wageDisplay}</td>
     </tr>`;
   }).join('');
+  const disciplineSection = isAdmin ? renderDisciplineAdminList() : '';
   return summary + `<table class="stats-table">
     <thead><tr><th>&#xC120;&#xC218;</th><th>&#xCD9C;&#xC11D;</th><th>&#xACF8;</th><th>&#xC5B4;&#xC2DC;</th><th>MOM</th><th>&#x1F4B0; &#xC120;&#xC218; &#xAC00;&#xCE58;</th></tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <div style="font-size:10px;color:var(--text3)">&#xACF8;&#xB7C9;&#xC5B4;&#xC2DC; &#xC22B;&#xC790;&#xB97C; &#xB204;&#xB974;&#xBA74; &#xACBD;&#xAE30;&#xBCC4; &#xD788;&#xC2A4;&#xD1A0;&#xB9AC; &middot; &#xC120;&#xC218; &#xAC00;&#xCE58; = &#xC804;&#xCCB4; &#xACBD;&#xAE30; &#xB204;&#xC801; &#xC218;&#xB2F9; &#xD569;&#xC0B0;</div>`;
+  <div style="font-size:10px;color:var(--text3)">&#xACF8;&#xB7C9;&#xC5B4;&#xC2DC; &#xC22B;&#xC790; &#xD074;&#xB9AD; &rarr; &#xACBD;&#xAE30;&#xBCC4; &#xD788;&#xC2A4;&#xD1A0;&#xB9AC; &middot; &#xAC00;&#xCE58; &#xD074;&#xB9AD; &rarr; &#xC218;&#xB2F9;/&#xC9D5;&#xACC4; &#xB0B4;&#xC5ED; &middot; &#xAC00;&#xCE58; = &#xC218;&#xB2F9; &#xD569; &minus; &#xC9D5;&#xACC4;</div>
+  ${disciplineSection}`;
 }
 function renderTeamStats(filtered) {
   if (!filtered.length) {
@@ -3475,6 +3560,173 @@ function openStatHistory(pid, type) {
 }
 function closeStatHistory() {
   document.getElementById('statHistoryModal').classList.remove('open');
+}
+
+function renderDisciplineAdminList() {
+  const sorted = [...disciplines].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!sorted.length) return '';
+  const rows = sorted.map(d => {
+    const p = players.find(pl => pl.id == d.pid);
+    const name = p ? (p.jersey != null ? '#' + p.jersey + ' ' : '') + p.name : '#' + d.pid;
+    const settled = d.settlementGroupId ? '<span class="discipline-settled-tag">\uC815\uC0B0\uBC18\uC601</span>' : '';
+    return `<div class="discipline-admin-row">
+      <span class="discipline-admin-date">${formatDateDisplay(d.date)}</span>
+      <span class="discipline-admin-name">${name}</span>
+      <span class="discipline-admin-level">${d.level}\uCC28</span>
+      <span class="discipline-admin-amount">-${(d.amount || 0).toLocaleString()}\uC6D0;</span>
+      <span class="discipline-admin-reason">${disciplineReasonLabel(d.reason)}</span>
+      ${settled}
+      <button class="discipline-del-btn" onclick="deleteDiscipline(${d.id})">\uC0AD\uC81C</button>
+    </div>`;
+  }).join('');
+  return `<div class="discipline-admin-section">
+    <div class="discipline-admin-title">\uC9D5\uACC4 \uAE30\uB85D (\uAD00\uB9AC\uC790)</div>
+    <div class="discipline-admin-list">${rows}</div>
+  </div>`;
+}
+
+function openValueHistory(pid) {
+  const p = players.find(x => x.id === pid);
+  if (!p) return;
+  const year = document.getElementById('statsYearFilter')?.value || 'ALL';
+  const filtered = filterMatchesByYear(matches, year);
+  const rows = [];
+  filtered.forEach(m => {
+    const w = computeMatchWages(m);
+    const total = w[pid]?.total || 0;
+    if (!total) return;
+    const tags = (w[pid].items || []).map(i => i.label).join(' ');
+    rows.push({ sortKey: m.date, date: m.date, type: 'wage', amount: total, detail: `vs ${m.oppTeam || '상대'} ${tags}` });
+  });
+  const yearDisc = disciplines.filter(d => {
+    if (d.pid != pid) return false;
+    if (year === 'ALL') return true;
+    return (d.date || '').startsWith(year);
+  });
+  yearDisc.forEach(d => {
+    rows.push({
+      sortKey: d.date,
+      date: d.date,
+      type: 'discipline',
+      amount: -(d.amount || 0),
+      detail: `${d.level}\uCC28 \uC9D5\uACC4 \u00B7 ${disciplineReasonLabel(d.reason)}${d.note ? ' \u00B7 ' + d.note : ''}`,
+    });
+  });
+  rows.sort((a, b) => (b.sortKey || '').localeCompare(a.sortKey || ''));
+  const gross = rows.filter(r => r.type === 'wage').reduce((s, r) => s + r.amount, 0);
+  const disc = rows.filter(r => r.type === 'discipline').reduce((s, r) => s + Math.abs(r.amount), 0);
+  const net = Math.max(0, gross - disc);
+  document.getElementById('statHistoryTitle').textContent = `${p.name} \u2014 \uC120\uC218 \uAC00\uCE58 \uB0B4\uC5ED`;
+  if (!rows.length) {
+    document.getElementById('statHistoryList').innerHTML = '<div class="stat-history-empty">\uB0B4\uC5ED \uC5C6\uC74C</div>';
+  } else {
+    document.getElementById('statHistoryList').innerHTML = rows.map(r =>
+      `<div class="stat-history-row ${r.type === 'discipline' ? 'stat-history-discipline' : ''}">
+        <span class="stat-history-date">${formatDateDisplay(r.date)}</span>
+        <span class="stat-history-detail">${r.detail}</span>
+        <span class="stat-history-count ${r.amount < 0 ? 'stat-history-minus' : ''}">${r.amount > 0 ? '+' : ''}${r.amount.toLocaleString()}\uC6D0;</span>
+      </div>`
+    ).join('') + `<div class="value-history-total">\uD569;&#xACC4; <strong>${net.toLocaleString()}\uC6D0;</strong> <span class="value-history-sub">(\uC218;&#xB2F9; ${gross.toLocaleString()} \u2212 \uC9D5;&#xACC4; ${disc.toLocaleString()})</span></div>`;
+  }
+  document.getElementById('statHistoryModal').classList.add('open');
+}
+
+function updateDisciplineFormHint() {
+  const sel = document.getElementById('disciplinePlayer');
+  const hint = document.getElementById('disciplineHint');
+  const levelSel = document.getElementById('disciplineLevel');
+  if (!sel || !hint) return;
+  const pid = parseInt(sel.value, 10);
+  if (!pid) { hint.textContent = ''; return; }
+  const count = disciplines.filter(d => d.pid == pid).length;
+  const suggested = getSuggestedDisciplineLevel(pid);
+  hint.textContent = `\uBD88\uD654\u00B7\uB9C8\uCC30 \uC9D5\uACC4 ${count}\uAC74 \u2192 \uAD8C\uC7A5: ${suggested}\uCC28 (-${DISCIPLINE_AMOUNTS[suggested].toLocaleString()}\uC6D0)`;
+  if (levelSel && !levelSel.dataset.userPicked) levelSel.value = String(suggested);
+}
+function openDisciplineModal(pid) {
+  if (!isAdmin) return;
+  const sel = document.getElementById('disciplinePlayer');
+  const levelSel = document.getElementById('disciplineLevel');
+  const dateInp = document.getElementById('disciplineDate');
+  const reasonSel = document.getElementById('disciplineReason');
+  const noteInp = document.getElementById('disciplineNote');
+  if (!sel) return;
+  const regular = players.filter(p => !p.isMercenary).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99));
+  sel.innerHTML = regular.map(p =>
+    `<option value="${p.id}">${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`
+  ).join('');
+  if (pid) sel.value = String(pid);
+  if (levelSel) { levelSel.dataset.userPicked = ''; levelSel.value = '1'; }
+  if (dateInp) dateInp.value = new Date().toISOString().slice(0, 10);
+  if (reasonSel) reasonSel.value = 'internal';
+  if (noteInp) noteInp.value = '';
+  updateDisciplineFormHint();
+  document.getElementById('disciplineModal')?.classList.add('open');
+}
+function closeDisciplineModal() {
+  document.getElementById('disciplineModal')?.classList.remove('open');
+}
+function saveDiscipline() {
+  if (!isAdmin) return;
+  const pid = parseInt(document.getElementById('disciplinePlayer')?.value, 10);
+  const level = parseInt(document.getElementById('disciplineLevel')?.value, 10);
+  const date = normalizeDate(document.getElementById('disciplineDate')?.value);
+  const reason = document.getElementById('disciplineReason')?.value || 'other';
+  const note = (document.getElementById('disciplineNote')?.value || '').trim();
+  if (!pid || !date || !level) { alert('\uC120\uC218, \uB0A0\uC9DC, \uCC28\uC218\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+  const amount = DISCIPLINE_AMOUNTS[level];
+  if (!amount) { alert('\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uCC28\uC218\uC785\uB2C8\uB2E4'); return; }
+  const matchOnDate = matches.find(m => normalizeDate(m.date) === date);
+  disciplines.push({
+    id: Date.now(),
+    pid,
+    level,
+    amount,
+    date,
+    matchId: matchOnDate?.id ?? null,
+    reason,
+    note,
+    settlementGroupId: null,
+    createdAt: new Date().toISOString(),
+  });
+  closeDisciplineModal();
+  persistDisciplines().catch(handleSaveError);
+  renderStats();
+  renderRoster();
+  refreshStatsIfVisible();
+}
+function deleteDiscipline(id) {
+  if (!isAdmin) return;
+  const d = disciplines.find(x => x.id == id);
+  if (!d) return;
+  let msg = '\uC774 \uC9D5\uACC4 \uAE30\uB85D\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?';
+  if (d.settlementGroupId) msg = '\uC774;&#xBBF8; &#xB9AC;&#xC6CC;&#xB4DC; &#xC815;&#xC0B0;&#xC5D0; &#xBC18;&#xC601;&#xB41C; &#xC9D5;&#xACC4;&#xC785;&#xB2C8;&#xB2E4. \uC0AD;&#xC81C;&#xD558;&#xBA74; &#xC815;&#xC0B0; &#xAE08;&#xC561;&#xACFC; &#xB2E4;&#xB984;&#xC9C0;&#xB9CC; &#xACC4;&#xC18D;&#xD558;&#xC2DC;&#xACA0;&#xC2B5;&#xB2C8;&#xAE4C?';
+  if (!confirm(msg)) return;
+  disciplines = disciplines.filter(x => x.id != id);
+  persistDisciplines().catch(handleSaveError);
+  renderStats();
+  renderRoster();
+  if (isTreasurer) renderTreasurer();
+}
+
+function openTreasurerDisciplineDetail(pid, from, to) {
+  const p = players.find(pl => pl.id == pid);
+  const { disciplineItems } = computeUnsettledWageBreakdown(pid, from, to);
+  if (!disciplineItems.length) return;
+  document.getElementById('disciplineDetailTitle').textContent = `${p?.name || ''} \u2014 \uC9D5;&#xACC4; \uC0C1;&#xC138; (${formatDateDisplay(from)} ~ ${formatDateDisplay(to)})`;
+  document.getElementById('disciplineDetailList').innerHTML = disciplineItems.map(d =>
+    `<div class="discipline-detail-row">
+      <span>${formatDateDisplay(d.date)}</span>
+      <span>${d.level}\uCC28</span>
+      <span class="discipline-detail-minus">-${(d.amount || 0).toLocaleString()}\uC6D0;</span>
+      <span>${disciplineReasonLabel(d.reason)}</span>
+      ${d.note ? `<span class="discipline-detail-note">${d.note}</span>` : ''}
+    </div>`
+  ).join('');
+  document.getElementById('disciplineDetailModal')?.classList.add('open');
+}
+function closeDisciplineDetailModal() {
+  document.getElementById('disciplineDetailModal')?.classList.remove('open');
 }
 
 // ── 탭 ──
@@ -3616,22 +3868,11 @@ function cleanupTreasurerData() {
 async function persistDues()        { await apiSavePartial({ dues });        localStorage.setItem('fc_dues',        JSON.stringify(dues));        }
 async function persistExpenses()    { await apiSavePartial({ expenses });    localStorage.setItem('fc_expenses',    JSON.stringify(expenses));    }
 async function persistSettlements() { await apiSavePartial({ settlements }); localStorage.setItem('fc_settlements', JSON.stringify(settlements)); }
+async function persistDisciplines() { await apiSavePartial({ disciplines }); localStorage.setItem('fc_disciplines', JSON.stringify(disciplines)); }
 
-// 미정산 리워드 계산 (정산 완료된 기간 제외, from/to 지정 시 해당 기간 경기만)
+// 미정산 리워드 (경기 수당 − 미반영 징계, 최소 0)
 function computeUnsettledWage(pid, from, to) {
-  if (players.find(p => p.id === pid)?.isMercenary) return 0;
-  const settled = settlements.filter(s => s.pid == pid && s.status === 'done');
-  const fromD = from ? normalizeDate(from) : null;
-  const toD   = to   ? normalizeDate(to)   : null;
-  return matches.reduce((sum, m) => {
-    const md = normalizeDate(m.date);
-    if (fromD && md < fromD) return sum;
-    if (toD && md > toD) return sum;
-    const isSettled = settled.some(s => md >= normalizeDate(s.startDate) && md <= normalizeDate(s.endDate));
-    if (isSettled) return sum;
-    const w = computeMatchWages(m);
-    return sum + (w[pid]?.total || 0);
-  }, 0);
+  return computeUnsettledWageBreakdown(pid, from, to).net;
 }
 
 // 대시보드 숫자 포맷
@@ -4008,9 +4249,9 @@ function previewSettlement() {
   const regularPlayers = players.filter(p => !p.isMercenary);
 
   const rows = regularPlayers.map(p => {
-    const wage = computeUnsettledWage(p.id, from, to);
-    return { p, wage };
-  }).filter(r => r.wage > 0);
+    const b = computeUnsettledWageBreakdown(p.id, from, to);
+    return { p, ...b };
+  }).filter(r => r.gross > 0 || r.discipline > 0);
 
   const preview = document.getElementById('trSettlementPreview');
   if (!preview) return;
@@ -4020,24 +4261,29 @@ function previewSettlement() {
     return;
   }
 
-  const totalAmt = rows.reduce((s, r) => s + r.wage, 0);
-  const canSettleAny = rows.some(r => !settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done'));
+  const totalAmt = rows.reduce((s, r) => s + r.net, 0);
+  const canSettleAny = rows.some(r => r.net > 0 && !settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done'));
   preview.innerHTML = `
     <div class="tr-settlement-preview">
       <div class="tr-preview-header">
-        <span>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC — <strong>${formatDateDisplay(from)} ~ ${formatDateDisplay(to)}</strong> · \uCD1D <strong>${fmtMoney(totalAmt)}</strong></span>
+        <span>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC \u2014 <strong>${formatDateDisplay(from)} ~ ${formatDateDisplay(to)}</strong> \u00B7 \uC2E4\uC9C0\uAE09 \uCD1D <strong>${fmtMoney(totalAmt)}</strong></span>
         ${canSettleAny ? `<button class="tr-btn-primary" onclick="executeSettlement('${from}','${to}')">\uC804\uCCB4 \uC815\uC0B0 \uC2E4\uD589</button>` : '<span class="tr-warn-badge">\uC774 \uAE30\uAC04 \uC774\uBBF8 \uC815\uC0B0\uB428</span>'}
       </div>
-      <table class="tr-table">
-        <thead><tr><th>\uC120\uC218</th><th>\uBBF8\uC815\uC0B0 \uB9AC\uC6CC\uB4DC</th><th>\uC0C1\uD0DC</th><th></th></tr></thead>
+      <table class="tr-table tr-settlement-detail-table">
+        <thead><tr><th>\uC120\uC218</th><th>\uACBD\uAE30 \uC218\uB2F9</th><th>\uC9D5\uACC4 \uCC28\uAC10</th><th>\uC2E4\uC9C0\uAE09</th><th>\uC0C1\uD0DC</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r => {
             const existing = settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done');
+            const discCell = r.discipline > 0
+              ? `<button type="button" class="tr-discipline-link" onclick="openTreasurerDisciplineDetail(${r.p.id},'${from}','${to}')">-${r.discipline.toLocaleString()}\uC6D0; \u24D8</button>`
+              : '\u2014';
             return `<tr>
               <td>${r.p.jersey != null ? '#' + r.p.jersey + ' ' : ''}${r.p.name}</td>
-              <td>${fmtMoney(r.wage)}</td>
+              <td>${fmtMoney(r.gross)}</td>
+              <td class="tr-discipline-cell">${discCell}</td>
+              <td><strong>${fmtMoney(r.net)}</strong></td>
               <td>${existing ? '<span class="tr-status-badge settled">\uC815\uC0B0\uC644\uB8CC</span>' : '<span class="tr-status-badge">\uBBF8\uC815\uC0B0</span>'}</td>
-              <td>${existing ? '' : `<button class="tr-btn-sm" onclick="executeSingleSettlement(${r.p.id},'${from}','${to}')">\uC815\uC0B0</button>`}</td>
+              <td>${existing || r.net <= 0 ? '' : `<button class="tr-btn-sm" onclick="executeSingleSettlement(${r.p.id},'${from}','${to}')">\uC815\uC0B0</button>`}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -4049,29 +4295,44 @@ function runSettlementBatch(from, to, pids) {
   const today = new Date().toISOString().slice(0, 10);
   const settlementGroupId = Date.now();
   const settledItems = [];
+  const disciplineNotes = [];
+  let linkedDisciplineOnly = false;
   pids.forEach(pid => {
-    const wage = computeUnsettledWage(pid, from, to);
-    if (wage <= 0) return;
+    const breakdown = computeUnsettledWageBreakdown(pid, from, to);
+    const { gross, discipline, net } = breakdown;
+    if (gross <= 0 && discipline <= 0) return;
     const already = settlements.find(s => s.pid == pid && s.startDate === from && s.endDate === to && s.status === 'done');
     if (already) return;
+    if (discipline > 0) {
+      linkDisciplinesToSettlement(pid, from, to, settlementGroupId);
+      linkedDisciplineOnly = true;
+    }
+    if (net <= 0) return;
+    const p = players.find(pl => pl.id == pid);
+    if (discipline > 0) {
+      disciplineNotes.push(`${p?.name || pid}: \uC9D5\uACC4 -${discipline.toLocaleString()}\uC6D0; \u2192 \uC2E4\uC9C0\uAE09 ${net.toLocaleString()}\uC6D0;`);
+    }
     settledItems.push({
       id: Date.now() + Math.random(),
       groupId: settlementGroupId,
       startDate: from,
       endDate: to,
       pid,
-      settledAmount: wage,
+      settledAmount: net,
       settledAt: today,
       status: 'done',
     });
   });
-  if (!settledItems.length) return null;
+  if (!settledItems.length) {
+    return linkedDisciplineOnly ? { count: 0, total: 0, disciplineOnly: true } : null;
+  }
   const total = settledItems.reduce((s, x) => s + (x.settledAmount || 0), 0);
   const names = settledItems.map(s => {
     const p = players.find(pl => pl.id == s.pid);
     return p ? p.name : ('#' + s.pid);
   }).join(', ');
-  const note = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} / ${settledItems.length}\uBA85(${names}) / \uCD1D ${fmtMoney(total)}`;
+  let note = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} / ${settledItems.length}\uBA85(${names}) / \uCD1D ${fmtMoney(total)}`;
+  if (disciplineNotes.length) note += ' / ' + disciplineNotes.join(' ');
   const newExpense = {
     id: Date.now() + 1,
     date: today,
@@ -4083,14 +4344,20 @@ function runSettlementBatch(from, to, pids) {
   };
   settlements.push(...settledItems);
   expenses.push(newExpense);
-  return { count: settledItems.length, total };
+  return { count: settledItems.length, total, disciplineOnly: false };
 }
 
 function executeSettlement(from, to) {
   const regularPlayers = players.filter(p => !p.isMercenary);
   const result = runSettlementBatch(from, to, regularPlayers.map(p => p.id));
   if (!result) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
-  Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
+  if (result.disciplineOnly) {
+    persistDisciplines().catch(handleSaveError);
+    alert('\uC9D5\uACC4\uB9CC \uBC18\uC601\uB418\uC5C8\uC2B5\uB2C8\uB2E4 (\uC9C0\uAE09 \uB9AC\uC6CC\uB4DC \uC5C6\uC74C)');
+    renderTreasurer();
+    return;
+  }
+  Promise.all([persistSettlements(), persistExpenses(), persistDisciplines()]).catch(handleSaveError);
   alert(`\uC815\uC0B0 \uC644\uB8CC! ${result.count}\uBA85, \uCD1D ${fmtMoney(result.total)}`);
   renderTreasurer();
 }
@@ -4098,7 +4365,13 @@ function executeSettlement(from, to) {
 function executeSingleSettlement(pid, from, to) {
   const result = runSettlementBatch(from, to, [pid]);
   if (!result) { alert('\uC815\uC0B0\uD560 \uB9AC\uC6CC\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4'); return; }
-  Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
+  if (result.disciplineOnly) {
+    persistDisciplines().catch(handleSaveError);
+    alert('\uC9D5\uACC4\uB9CC \uBC18\uC601\uB418\uC5C8\uC2B5\uB2C8\uB2E4 (\uC9C0\uAE09 \uB9AC\uC6CC\uB4DC \uC5C6\uC74C)');
+    renderTreasurer();
+    return;
+  }
+  Promise.all([persistSettlements(), persistExpenses(), persistDisciplines()]).catch(handleSaveError);
   alert(`\uC815\uC0B0 \uC644\uB8CC! ${dueTargetLabel(pid)}, ${fmtMoney(result.total)}`);
   renderTreasurer();
 }
@@ -4258,13 +4531,14 @@ function cancelSettlement(key) {
   if (groupId) {
     settlements = settlements.filter(s => s.groupId !== groupId);
     expenses = expenses.filter(ex => ex.settlementId != groupId);
+    disciplines.forEach(d => { if (d.settlementGroupId == groupId) d.settlementGroupId = null; });
   } else {
     const [dateRange, settledAt] = key.split('|');
     const [startDate, endDate] = dateRange.split('~');
     settlements = settlements.filter(s => !(s.startDate === startDate && s.endDate === endDate && s.settledAt === settledAt));
     expenses = expenses.filter(ex => ex.settlementId != settledAt && ex.settlementId !== settledAt);
   }
-  Promise.all([persistSettlements(), persistExpenses()]).catch(handleSaveError);
+  Promise.all([persistSettlements(), persistExpenses(), persistDisciplines()]).catch(handleSaveError);
   renderTreasurer();
 }
 
@@ -4281,6 +4555,10 @@ document.getElementById('noticeModal')?.addEventListener('click',function(e){if(
 document.getElementById('noticeEditModal')?.addEventListener('click',function(e){if(e.target===this)closeNoticeEditModal();});
 document.getElementById('bulkDuesModal')?.addEventListener('click',function(e){if(e.target===this)closeBulkDuesModal();});
 document.getElementById('exemptionModal')?.addEventListener('click',function(e){if(e.target===this)closeExemptionModal();});
+document.getElementById('disciplineModal')?.addEventListener('click',function(e){if(e.target===this)closeDisciplineModal();});
+document.getElementById('disciplineDetailModal')?.addEventListener('click',function(e){if(e.target===this)closeDisciplineDetailModal();});
+document.getElementById('disciplinePlayer')?.addEventListener('change',updateDisciplineFormHint);
+document.getElementById('disciplineLevel')?.addEventListener('change',function(){this.dataset.userPicked='1';});
 bootstrapApp();
 function onFieldResize(){
   if(!document.getElementById('tab-formation').classList.contains('active'))return;

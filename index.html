@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=92">
+<link rel="stylesheet" href="style.css?v=93">
 
 
 
@@ -1723,7 +1723,9 @@
 
 
 
-  </div>
+  
+    <button type="button" class="stats-discipline-add-btn admin-only" onclick="openDisciplineModal()">+ 징계 등록</button>
+</div>
 
 
 
@@ -1747,6 +1749,48 @@
 
 
 
+
+
+
+<div class="modal-bg" id="disciplineModal">
+  <div class="modal modal-sm">
+    <h3>징계 등록</h3>
+    <p style="font-size:11px;color:var(--text3);margin:0 0 10px">9조 8항 (불화·마찰) · 선수 가치·연말 리워드에서 차감</p>
+    <label class="modal-label">선수</label>
+    <select id="disciplinePlayer" class="modal-input"></select>
+    <div id="disciplineHint" class="discipline-form-hint"></div>
+    <label class="modal-label">차수</label>
+    <select id="disciplineLevel" class="modal-input">
+      <option value="1">1차 — 선수 가치 -1,000원 + 당일 출전 정지</option>
+      <option value="2">2차 — 선수 가치 -2,000원 + 당일 출전 정지</option>
+      <option value="3">3차 — 선수 가치 -3,000원 + 당일 출전 정지</option>
+    </select>
+    <label class="modal-label">날짜</label>
+    <input type="date" id="disciplineDate" class="modal-input">
+    <label class="modal-label">사유</label>
+    <select id="disciplineReason" class="modal-input">
+      <option value="internal">팀 내 불화</option>
+      <option value="opponent">상대팀 마찰</option>
+      <option value="other">기타</option>
+    </select>
+    <label class="modal-label">메모 (선택)</label>
+    <input type="text" id="disciplineNote" class="modal-input" placeholder="임원 메모">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDisciplineModal()">취소</button>
+      <button class="btn-save" onclick="saveDiscipline()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="disciplineDetailModal">
+  <div class="modal modal-sm">
+    <h3 id="disciplineDetailTitle">징계 상세</h3>
+    <div id="disciplineDetailList" class="stat-history-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDisciplineDetailModal()">닫기</button>
+    </div>
+  </div>
+</div>
 
 <div id="tab-treasurer" class="tab-panel"></div>
 
@@ -3418,7 +3462,7 @@
 
 
 
-<script src="app.js?v=92"></script>
+<script src="app.js?v=93"></script>
 
 
 

@@ -517,6 +517,17 @@ function alertFormationRequired() {
 }
 
 // ── 쿼터 전환 ──
+function isQuarterEmpty(qd) {
+  return !qd || !qd.tokens?.length;
+}
+function copyQuarterFromPrev(q) {
+  const prev = quarterData[q - 1];
+  if (q <= 1 || !prev?.tokens?.length) return null;
+  return {
+    formation: prev.formation || inferFormationFromTokens(prev.tokens) || '',
+    tokens: JSON.parse(JSON.stringify(prev.tokens)),
+  };
+}
 function switchQuarter(q) {
   if (q === activeQuarter) return;
   // 현재 쿼터 상태를 quarterData에 저장
@@ -526,23 +537,22 @@ function switchQuarter(q) {
   };
   activeQuarter = q;
   let qd = quarterData[q];
-  if (!qd || (!qd.tokens?.length && !qd.formation)) {
-    const prev = quarterData[q - 1];
-    if (q > 1 && prev && (prev.tokens?.length || prev.formation)) {
-      qd = {
-        formation: prev.formation || '',
-        tokens: JSON.parse(JSON.stringify(prev.tokens || [])),
-      };
+  // 선수 배치가 없으면 직전 쿼터 라인업 복사 (포메이션만 있고 비어 있는 경우 포함)
+  if (isQuarterEmpty(qd)) {
+    const copied = copyQuarterFromPrev(q);
+    if (copied) {
+      qd = copied;
       quarterData[q] = qd;
     }
   }
-  if (qd && (qd.tokens?.length || qd.formation)) {
+  if (!isQuarterEmpty(qd)) {
     fieldTokens = normalizeFieldTokens(qd.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}));
-    setFormationSelect(qd.formation || '');
-    if (qd.formation) reconcileFieldTokensToFormation();
+    const formation = resolveFormation(qd.formation, fieldTokens);
+    setFormationSelect(formation);
+    if (formation) reconcileFieldTokensToFormation();
   } else {
     fieldTokens = [];
-    setFormationSelect('');
+    setFormationSelect(qd?.formation || '');
   }
   updateQuarterButtons();
   drawFieldCanvas();
@@ -745,7 +755,7 @@ function applyRemoteData(data) {
   schedules     = normalizeScheduleDates(data.schedules || []);
   notices       = normalizeNoticeDates(data.notices || []);
   dueExemptions = normalizeExemptionMonths(data.dueExemptions || []);
-  dueMemos      = (data.dueMemos || []).map(m => ({ ...m, yearMonth: m.yearMonth || '' }));
+  dueMemos      = normalizeDueMemos(data.dueMemos || []);
   if (cleanupTreasurerData()) {
     persistExpenses().catch(() => {});
     persistSettlements().catch(() => {});
@@ -814,10 +824,9 @@ function applyRemoteData(data) {
     // 신규 쿼터 형식
     for (let q = 1; q <= 4; q++) {
       const rawTokens = field['q'+q+'tokens'] || [];
-      quarterData[q] = {
-        formation: field['q'+q+'formation'] || '',
-        tokens: normalizeFieldTokens(rawTokens).map(migrateT)
-      };
+      const formation = field['q'+q+'formation'] || '';
+      const tokens = normalizeFieldTokens(rawTokens).map(migrateT);
+      quarterData[q] = (!tokens.length && !formation) ? null : { formation, tokens };
     }
     activeQuarter = field.activeQuarter || 1;
   } else {
@@ -899,7 +908,7 @@ function loadLocalFallback() {
   schedules     = normalizeScheduleDates(JSON.parse(localStorage.getItem('fc_schedules')     || '[]'));
   notices       = normalizeNoticeDates(JSON.parse(localStorage.getItem('fc_notices')       || '[]'));
   dueExemptions = normalizeExemptionMonths(JSON.parse(localStorage.getItem('fc_due_exemptions') || '[]'));
-  dueMemos      = JSON.parse(localStorage.getItem('fc_due_memos') || '[]');
+  dueMemos      = normalizeDueMemos(JSON.parse(localStorage.getItem('fc_due_memos') || '[]'));
   cleanupTreasurerData();
   loadFieldState();
 }
@@ -2644,7 +2653,7 @@ function applyFormation(){
 }
 function clearField(){
   fieldTokens=[];
-  quarterData[activeQuarter]={formation:getFormation(),tokens:[]};
+  quarterData[activeQuarter] = getFormation() ? { formation: getFormation(), tokens: [] } : null;
   saveFieldState();renderField();
 }
 function saveFieldState(){ persistField().catch(handleSaveError); }
@@ -2757,11 +2766,13 @@ function loadFieldState(){
       const o = JSON.parse(qRaw);
       quarterData = o.quarterData || {1:null,2:null,3:null,4:null};
       activeQuarter = o.activeQuarter || 1;
-      // 각 쿼터 토큰 마이그레이션
+      // 각 쿼터 토큰 마이그레이션 + 빈 쿼터는 null
       for (let q = 1; q <= 4; q++) {
-        if (quarterData[q]?.tokens) {
-          quarterData[q].tokens = normalizeFieldTokens(quarterData[q].tokens).map(migrateTokenPos);
-        }
+        const qd = quarterData[q];
+        if (!qd) { quarterData[q] = null; continue; }
+        const tokens = normalizeFieldTokens(qd.tokens || []).map(migrateTokenPos);
+        const formation = qd.formation || '';
+        quarterData[q] = (!tokens.length && !formation) ? null : { formation, tokens };
       }
       const qd = quarterData[activeQuarter];
       if (qd) {
@@ -3459,7 +3470,8 @@ function getPaymentStatus(pid, ym) {
   return paid ? 'paid' : 'unpaid';
 }
 function getDueMemo(pid, ym) {
-  return dueMemos.find(m => m.pid == pid && m.yearMonth === ym);
+  const month = normalizeYearMonth(ym);
+  return dueMemos.find(m => m.pid == pid && normalizeYearMonth(m.yearMonth) === month);
 }
 function paymentStatusLabel(st) {
   if (st === 'paid') return '\uB0A9\uBD80';
@@ -3490,13 +3502,15 @@ function editDueMemo(pid) {
   const note = prompt(`${formatYearMonthDisplay(ym)} ${name} \uBA54\uBAA8`, existing?.note || '');
   if (note === null) return;
   const trimmed = note.trim();
-  const idx = dueMemos.findIndex(m => m.pid == pid && m.yearMonth === ym);
+  const month = normalizeYearMonth(ym);
+  const idx = dueMemos.findIndex(m => m.pid == pid && normalizeYearMonth(m.yearMonth) === month);
   if (!trimmed) {
     if (idx >= 0) dueMemos.splice(idx, 1);
   } else if (idx >= 0) {
     dueMemos[idx].note = trimmed;
+    dueMemos[idx].yearMonth = month;
   } else {
-    dueMemos.push({ id: Date.now(), pid, yearMonth: ym, note: trimmed });
+    dueMemos.push({ id: Date.now(), pid, yearMonth: month, note: trimmed });
   }
   persistDueMemos().catch(handleSaveError);
   renderTreasurer();

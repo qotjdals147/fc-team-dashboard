@@ -114,11 +114,31 @@ function normalizeScheduleDates(list) {
 function normalizeNoticeDates(list) {
   return (list || []).map(n => ({ ...n, date: normalizeDate(n.date) }));
 }
+function normalizeYearMonth(val) {
+  if (val == null || val === '') return '';
+  if (val instanceof Date && !isNaN(val)) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+  const s = String(val).trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}`;
+  const dot = s.match(/^(\d{4})\.\s*(\d{1,2})/);
+  if (dot) return `${dot[1]}-${String(dot[2]).padStart(2, '0')}`;
+  return '';
+}
 function normalizeExemptionMonths(list) {
   return (list || []).map(e => ({
     ...e,
-    fromMonth: (e.fromMonth || '').slice(0, 7),
-    toMonth: (e.toMonth || '').slice(0, 7),
+    fromMonth: normalizeYearMonth(e.fromMonth),
+    toMonth: normalizeYearMonth(e.toMonth),
+  }));
+}
+function normalizeDueMemos(list) {
+  return (list || []).map(m => ({
+    ...m,
+    yearMonth: normalizeYearMonth(m.yearMonth),
   }));
 }
 function currentYearMonth() {
@@ -127,7 +147,7 @@ function currentYearMonth() {
 }
 function yearMonthFromDate(dateStr) {
   const d = normalizeDate(dateStr);
-  return d ? d.slice(0, 7) : '';
+  return d ? normalizeYearMonth(d) : '';
 }
 function formatYearMonthDisplay(ym) {
   if (!ym) return '';

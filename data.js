@@ -48,6 +48,36 @@ function formatDateDisplay(val) {
   const [y, m, d] = n.split('-');
   return `${y}.${m}.${d}`;
 }
+// 시간: 시트 Date/ISO(1899-12-30T…) → HH:mm (KST)
+function normalizeTime(val) {
+  if (val == null || val === '') return '';
+  const s = String(val).trim();
+  const plain = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (plain) return `${String(plain[1]).padStart(2, '0')}:${plain[2]}`;
+  const sheetsIso = s.match(/^1899-\d{2}-\d{2}T(\d{2}):(\d{2})/);
+  if (sheetsIso) {
+    let total = parseInt(sheetsIso[1], 10) * 60 + parseInt(sheetsIso[2], 10) + 9 * 60;
+    total = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  }
+  if (val instanceof Date && !isNaN(val)) {
+    const h = String(val.getHours()).padStart(2, '0');
+    const m = String(val.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  if (s.includes('T')) {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+  }
+  return '';
+}
+function formatTimeDisplay(val) {
+  return normalizeTime(val);
+}
 function normalizeMatchDates(list) {
   return (list || []).map(m => ({ ...m, date: normalizeDate(m.date) || m.date }));
 }
@@ -75,7 +105,11 @@ function normalizeSettlementDates(list) {
   }));
 }
 function normalizeScheduleDates(list) {
-  return (list || []).map(s => ({ ...s, date: normalizeDate(s.date) }));
+  return (list || []).map(s => ({
+    ...s,
+    date: normalizeDate(s.date),
+    time: normalizeTime(s.time) || '',
+  }));
 }
 function normalizeNoticeDates(list) {
   return (list || []).map(n => ({ ...n, date: normalizeDate(n.date) }));

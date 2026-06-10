@@ -1252,7 +1252,7 @@ function renderScheduleModalContent() {
   const upcoming = sorted.filter(s => (s.date || '') >= today);
   const cards = (upcoming.length ? upcoming : sorted).map(s => `
     <div class="home-schedule-card">
-      <div class="home-schedule-date">${formatDateDisplay(s.date)}${s.time ? ' ' + s.time : ''}</div>
+      <div class="home-schedule-date">${formatDateDisplay(s.date)}${s.time ? ' ' + formatTimeDisplay(s.time) : ''}</div>
       <div class="home-schedule-opp">vs ${s.opponent || '-'}</div>
       ${s.note ? `<div class="home-schedule-note">${s.note}</div>` : ''}
       ${isAdmin ? `<div class="home-schedule-admin">
@@ -1270,7 +1270,7 @@ function openScheduleEditModal(id) {
   const s = id ? schedules.find(x => x.id == id) : null;
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('schedDate').value = normalizeDate(s?.date) || today;
-  document.getElementById('schedTime').value = s?.time || '';
+  document.getElementById('schedTime').value = normalizeTime(s?.time) || '';
   document.getElementById('schedOpponent').value = s?.opponent || '';
   document.getElementById('schedNote').value = s?.note || '';
   document.getElementById('scheduleEditModal').classList.add('open');
@@ -1281,7 +1281,7 @@ function closeScheduleEditModal() {
 }
 function saveScheduleItem() {
   const date = normalizeDate(document.getElementById('schedDate').value);
-  const time = document.getElementById('schedTime').value.trim();
+  const time = normalizeTime(document.getElementById('schedTime').value.trim());
   const opponent = document.getElementById('schedOpponent').value.trim();
   const note = document.getElementById('schedNote').value.trim();
   if (!date || !opponent) { alert('\uB0A0\uC9DC\uC640 \uC0C1\uB300 \uD300\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }

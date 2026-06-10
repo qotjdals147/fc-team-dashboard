@@ -628,6 +628,11 @@ function tokenXY(t) {
   if (t.slotIdx >= 0 && slots[t.slotIdx]) return { x: slots[t.slotIdx][0], y: slots[t.slotIdx][1] };
   return { x: 0.5, y: 0.5 };
 }
+function resolveTokenPos(t, p) {
+  const labels = getLabels();
+  const slotLabel = (t.slotIdx >= 0 && labels[t.slotIdx]) ? labels[t.slotIdx] : '';
+  return t.pos || slotLabel || p.positions[0] || '';
+}
 function slotDefaultXY(i) {
   const slots = getSlots();
   return slots[i] ? { x: slots[i][0], y: slots[i][1] } : { x: 0.5, y: 0.5 };
@@ -2202,111 +2207,176 @@ function canvasRoundRect(ctx, x, y, w, h, r) {
   ctx.quadraticCurveTo(x, y, x + rr, y);
   ctx.closePath();
 }
-function drawExportToken(ctx, p, t, cx, cy, sc) {
-  ctx.save(); // 전체 토큰 상태 보호
-  const pos = t.pos || p.positions[0] || '';
+function exportStarFill(tier) {
+  if (tier === 'tier-5' || tier === 'tier-4') return '#ffd700';
+  if (tier === 'tier-3') return '#c9a227';
+  if (tier === 'tier-2') return '#d8dce6';
+  return '#b8bcc4';
+}
+function exportOvrValColor(tier) {
+  if (tier === 'tier-5') return '#ffd700';
+  if (tier === 'tier-4') return '#ffd700';
+  if (tier === 'tier-3') return '#f5e6a8';
+  return '#fff';
+}
+function exportOvrPillBorder(tier) {
+  if (tier === 'tier-5') return 'rgba(255,215,0,0.65)';
+  if (tier === 'tier-4') return 'rgba(255,215,0,0.5)';
+  if (tier === 'tier-3') return 'rgba(201,162,39,0.45)';
+  return 'rgba(255,255,255,0.18)';
+}
+/** PNG용 토큰 — 화면 `buildTokenInnerHtml` 레이아웃·스타일과 동일 (cx,cy = 토큰 중심) */
+function drawExportToken(ctx, p, t, cx, cy, tk) {
+  const pos = resolveTokenPos(t, p);
   const ovr = getOvr(p, pos);
-  const r = 18 * sc;
-  // 필드 배치 포지션(t.pos) 기준 색깔 — 없으면 등록 포지션 기준
+  const bonus = p.formBonus || 0;
+  const effectiveOvr = ovr != null ? ovr + bonus : null;
+  const starTier = effectiveOvr != null ? ovrStarTier(effectiveOvr) : '';
+  const pillTier = effectiveOvr != null ? ovrStarTier(effectiveOvr) : 'tier-1';
   const color = posColor(pos ? [pos] : p.positions);
-
-  // 1) OVR 별 아치 — circle top 위에만 위치 (circle과 겹치지 않음)
+  const circleR = 18 * tk;
+  const wrapH = 36 * tk;
+  const wrapMt = 10 * tk;
+  const pillMt = 2 * tk;
+  const pillPadY = 2 * tk;
+  const pillPadX = 7 * tk;
+  const labelFs = 7 * tk;
+  const valFs = 10 * tk;
+  const bonusFs = 8 * tk;
+  const subFs = 9 * tk;
+  const subMt = 3 * tk;
+  const subPadX = 5 * tk;
+  const subPadY = 1 * tk;
+  const subP = t.subPid ? players.find(x => x.id === t.subPid) : null;
+  const subText = subP ? `\uD83D\uDD04 ${subP.jersey != null ? subP.jersey + ' ' : ''}${subP.name}` : '';
+  let pillW = 0;
+  let pillH = 0;
   if (ovr != null) {
-    const n = ovrStarCount(ovr);
+    ctx.font = `700 ${labelFs}px sans-serif`;
+    const lw = ctx.measureText('OVR+').width;
+    ctx.font = `800 ${valFs}px sans-serif`;
+    const vw = ctx.measureText(String(Math.round(ovr))).width;
+    let bw = 0;
+    if (bonus !== 0) {
+      ctx.font = `800 ${bonusFs}px sans-serif`;
+      bw = ctx.measureText(`${bonus > 0 ? '+' : ''}${bonus}`).width + 8 * tk;
+    }
+    pillW = pillPadX * 2 + lw + 3 * tk + vw + (bw ? 3 * tk + bw : 0);
+    pillH = pillPadY * 2 + valFs;
+  }
+  let subW = 0;
+  let subH = 0;
+  if (subText) {
+    ctx.font = `600 ${subFs}px sans-serif`;
+    subW = Math.min(ctx.measureText(subText).width + subPadX * 2, 64 * tk);
+    subH = subFs + subPadY * 2;
+  }
+  const totalH = wrapMt + wrapH + (ovr != null ? pillMt + pillH : 0) + (subText ? subMt + subH : 0);
+  const wrapTop = cy - totalH / 2 + wrapMt;
+  const circleCy = wrapTop + wrapH / 2;
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (effectiveOvr != null) {
+    const n = ovrStarCount(effectiveOvr);
     const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
-    const arcW = 48 * sc;
-    // 별 중심 최하단이 circle top(cy - r) 에서 6px 위에 오도록
-    const arcBaseY = cy - r - 6 * sc;
-    const arcH = 16 * sc;
-    ctx.font = `${7 * sc}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = n >= 5 ? '#ffd700' : n >= 4 ? '#f5d060' : n >= 3 ? '#d4d4d8' : '#a8a8a8';
+    const arcW = 54 * tk;
+    const arcTop = wrapTop - 12 * tk;
+    const arcH = 20 * tk;
+    ctx.font = `${9 * tk}px sans-serif`;
+    ctx.fillStyle = exportStarFill(starTier);
+    if (starTier === 'tier-4' || starTier === 'tier-5') {
+      ctx.shadowColor = 'rgba(255,215,0,0.75)';
+      ctx.shadowBlur = 4 * tk;
+    }
     pts.forEach(([l, tv]) => {
       const ax = cx - arcW / 2 + (l / 100) * arcW;
-      const ay = arcBaseY - (tv / 22) * arcH; // tv 높을수록 위로
-      ctx.fillText('★', ax, ay);
+      const ay = arcTop + (tv / 100) * arcH;
+      ctx.fillText('\u2605', ax, ay);
     });
+    ctx.shadowBlur = 0;
   }
 
-  // 2) 원 (circle) — save/restore 로 shadow 격리
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 4 * sc;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.restore(); // shadow 해제
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-  ctx.lineWidth = 2 * sc;
-  ctx.stroke();
-
-  // 3) 이니셜
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${12 * sc}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(p.name.slice(0, 2), cx, cy);
-
-  // 4) 포지션 뱃지 — circle top 바로 위 (별 아래)
   if (pos) {
-    ctx.font = `bold ${8 * sc}px sans-serif`;
-    ctx.textAlign = 'center';
-    const bw = Math.max(ctx.measureText(pos).width + 8 * sc, 22 * sc);
-    const bh = 12 * sc;
+    ctx.font = `700 ${8 * tk}px sans-serif`;
+    const bw = Math.max(ctx.measureText(pos).width + 10 * tk, 22 * tk);
+    const bh = 12 * tk;
     const bx = cx - bw / 2;
-    const by = cy - r - bh - 2 * sc; // circle top 바로 위
+    const badgeTop = circleCy - circleR - 9 * tk;
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    canvasRoundRect(ctx, bx, by, bw, bh, 4 * sc);
+    canvasRoundRect(ctx, bx, badgeTop, bw, bh, 4 * tk);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.fillText(pos, cx, by + bh / 2);
+    ctx.fillText(pos, cx, badgeTop + bh / 2);
   }
 
-  // 5) 이름
-  const name = `${p.jersey ? p.jersey + ' ' : ''}${p.name}`;
-  ctx.font = `600 ${10 * sc}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  ctx.lineWidth = 3 * sc;
-  ctx.strokeText(name, cx, cy + r + 10 * sc);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 6 * tk;
+  ctx.shadowOffsetY = 2 * tk;
+  ctx.beginPath();
+  ctx.arc(cx, circleCy, circleR, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(cx, circleCy, circleR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 2 * tk;
+  ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.fillText(name, cx, cy + r + 10 * sc);
+  ctx.font = `700 ${12 * tk}px sans-serif`;
+  ctx.fillText(p.name.slice(0, 2), cx, circleCy);
 
-  // 6) OVR pill
   if (ovr != null) {
-    const n = ovrStarCount(ovr);
-    const ovrText = `OVR+ ${Math.round(ovr)}`;
-    ctx.font = `bold ${8 * sc}px sans-serif`;
-    const ovrY = cy + r + 22 * sc;
-    const tw = ctx.measureText(ovrText).width + 10 * sc;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    canvasRoundRect(ctx, cx - tw / 2, ovrY - 6 * sc, tw, 12 * sc, 4 * sc);
+    const pillTop = wrapTop + wrapH + pillMt;
+    const pillLeft = cx - pillW / 2;
+    ctx.fillStyle = pillTier === 'tier-5' ? 'rgba(10,10,10,0.72)' : 'rgba(0,0,0,0.58)';
+    canvasRoundRect(ctx, pillLeft, pillTop, pillW, pillH, 6 * tk);
     ctx.fill();
-    ctx.fillStyle = n >= 5 ? '#ffd700' : '#fff';
-    ctx.fillText(ovrText, cx, ovrY);
-  }
-
-  // 7) 교체 예정 표시
-  if (t.subPid) {
-    const subP = players.find(x => x.id === t.subPid);
-    if (subP) {
-      const subText = `🔄 ${subP.jersey ? subP.jersey + ' ' : ''}${subP.name}`;
-      ctx.font = `600 ${8 * sc}px sans-serif`;
-      const tw = ctx.measureText(subText).width + 8 * sc;
-      const sx = cx - tw / 2;
-      const sy = cy + r + (ovr != null ? 34 : 24) * sc;
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      canvasRoundRect(ctx, sx, sy, tw, 12 * sc, 5 * sc);
+    ctx.strokeStyle = exportOvrPillBorder(pillTier);
+    ctx.lineWidth = 1 * tk;
+    canvasRoundRect(ctx, pillLeft, pillTop, pillW, pillH, 6 * tk);
+    ctx.stroke();
+    const pillCy = pillTop + pillH / 2;
+    let px = pillLeft + pillPadX;
+    ctx.textAlign = 'left';
+    ctx.font = `700 ${labelFs}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText('OVR+', px, pillCy);
+    px += ctx.measureText('OVR+').width + 3 * tk;
+    ctx.font = `800 ${valFs}px sans-serif`;
+    ctx.fillStyle = exportOvrValColor(pillTier);
+    ctx.fillText(String(Math.round(ovr)), px, pillCy);
+    px += ctx.measureText(String(Math.round(ovr))).width;
+    if (bonus !== 0) {
+      px += 3 * tk;
+      const bonusText = `${bonus > 0 ? '+' : ''}${bonus}`;
+      ctx.font = `800 ${bonusFs}px sans-serif`;
+      const bw = ctx.measureText(bonusText).width + 8 * tk;
+      const bh = bonusFs + 2 * tk;
+      const by = pillCy - bh / 2;
+      ctx.fillStyle = bonus > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)';
+      canvasRoundRect(ctx, px, by, bw, bh, 4 * tk);
       ctx.fill();
-      ctx.fillStyle = '#ffe066';
-      ctx.fillText(subText, cx, sy + 6 * sc);
+      ctx.fillStyle = bonus > 0 ? '#4ade80' : '#f87171';
+      ctx.fillText(bonusText, px + 4 * tk, pillCy);
     }
   }
+
+  if (subText) {
+    const subTop = wrapTop + wrapH + (ovr != null ? pillMt + pillH : 0) + subMt;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    canvasRoundRect(ctx, cx - subW / 2, subTop, subW, subH, 5 * tk);
+    ctx.fill();
+    ctx.fillStyle = '#ffe066';
+    ctx.font = `600 ${subFs}px sans-serif`;
+    ctx.fillText(subText, cx, subTop + subH / 2, subW - subPadX * 2);
+  }
+
   ctx.restore();
 }
 function getBenchPlayers() {
@@ -2319,22 +2389,24 @@ function downloadPngBlob(blob, filename) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 200);
 }
 async function exportFormationImage() {
   if (!isFormationSelected()) { alertFormationRequired(); return; }
   if (!fieldTokens.length) { alert('배치된 선수가 없습니다'); return; }
   const sc = 2;
+  const exportTk = sc * Math.min(1, Math.max(0.6, 420 / 340));
   const fieldW = 420 * sc;
   const fieldH = Math.round(fieldW * 1.45);
   const pad = 14 * sc;
   const headerH = 48 * sc;
-  const bench = getBenchPlayers();
-  const benchH = bench.length ? 36 * sc : 0;
   const canvas = document.createElement('canvas');
   canvas.width = fieldW + pad * 2;
-  canvas.height = headerH + fieldH + pad * 2 + benchH;
+  canvas.height = headerH + fieldH + pad * 2;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#141412';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2370,39 +2442,17 @@ async function exportFormationImage() {
     if (!p) return;
     const { x, y } = tokenXY(t);
     const { x: px, y: py } = normToCanvasPx(x, y, fieldW, fieldH);
-    drawExportToken(ctx, p, t, pad + px, fieldY + py, sc);
+    drawExportToken(ctx, p, t, pad + px, fieldY + py, exportTk);
   });
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1 * sc;
   canvasRoundRect(ctx, pad, fieldY, fieldW, fieldH, cornerR);
   ctx.stroke();
-  if (bench.length) {
-    const benchY = fieldY + fieldH + pad;
-    ctx.fillStyle = '#a0a09d';
-    ctx.font = `600 ${9 * sc}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText('벤치', pad, benchY + 10 * sc);
-    const labels = bench.map(p => {
-      const o = getBestOvr(p);
-      const eff = o != null ? o + (p.formBonus || 0) : null;
-      return `${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}${eff != null ? `(${eff})` : ''}`;
-    });
-    ctx.fillStyle = '#d0d0cd';
-    ctx.font = `${10 * sc}px sans-serif`;
-    ctx.fillText(labels.join(' · '), pad, benchY + 26 * sc);
-  }
   const safeTeam = team.replace(/[^\w가-힣]/g, '').slice(0, 12) || 'FC';
   const filename = `formation-${activeQuarter}Q-${formation}-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
-  canvas.toBlob(async blob => {
+  canvas.toBlob(blob => {
     if (!blob) { alert('이미지 생성에 실패했습니다'); return; }
-    const file = new File([blob], filename, { type: 'image/png' });
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `${team} ${qLabel} ${formation}` });
-        return;
-      } catch (e) { if (e.name === 'AbortError') return; }
-    }
     downloadPngBlob(blob, filename);
   }, 'image/png');
 }
@@ -2478,7 +2528,7 @@ function renderField() {
     const labels=getLabels();
     const slotLabel=(t.slotIdx>=0&&labels[t.slotIdx])?labels[t.slotIdx]:'';
     if(!t.pos&&slotLabel) t.pos=slotLabel; // 비어있을 때만 슬롯 라벨로 채움
-    const pos=t.pos||slotLabel||p.positions[0]||'';
+    const pos=resolveTokenPos(t,p);
     const ovr=getOvr(p,pos);
     const {x,y}=tokenXY(t);
     const {left,top}=tokenPos(x,y);

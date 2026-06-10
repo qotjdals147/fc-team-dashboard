@@ -512,6 +512,10 @@ body.presentation-mode .field-export-btn {
 .discipline-settled-tag { font-size:9px; background:#e0e7ff; color:#3730a3; padding:1px 6px; border-radius:6px; }
 .discipline-del-btn { font-size:10px; padding:2px 8px; border:1px solid var(--danger-text); background:transparent; color:var(--danger-text); border-radius:var(--radius); cursor:pointer; }
 .stats-discipline-add-btn { flex-shrink:0; font-size:11px; padding:6px 10px; border:1px solid #dc2626; background:#fef2f2; color:#dc2626; border-radius:var(--radius); cursor:pointer; font-weight:600; white-space:nowrap; }
+.notice-edit-modal { max-width:min(560px, 96vw); width:100%; }
+.notice-edit-body { width:100%; min-height:300px; padding:10px 11px; border:1px solid var(--border2); border-radius:var(--radius); font-size:14px; line-height:1.55; background:var(--bg); color:var(--text); resize:vertical; box-sizing:border-box; font-family:inherit; }
+.notice-edit-body:focus { outline:none; border-color:#185FA5; }
+.notice-edit-field { margin-bottom:16px; }
 .discipline-form-hint { font-size:11px; color:#b45309; margin:8px 0; padding:8px; background:#fffbeb; border-radius:var(--radius); border:1px solid #fde68a; }
 .modal-label { display:block; font-size:11px; font-weight:600; color:var(--text2); margin:10px 0 4px; }
 .modal-input { width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--border2); border-radius:var(--radius); background:var(--bg); color:var(--text); font-size:13px; }

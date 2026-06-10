@@ -104,7 +104,7 @@ function normalizeSettlementDates(list) {
     settledAt: normalizeDate(s.settledAt),
   }));
 }
-const DISCIPLINE_AMOUNTS = { 1: 1000, 2: 2000, 3: 3000 };
+const DISCIPLINE_AMOUNTS = { 1: 1000, 2: 2000, 3: 3000, 30: 30, 50: 50 };
 function normalizeDisciplineDates(list) {
   return (list || []).map(d => {
     const level = Number(d.level) || 1;

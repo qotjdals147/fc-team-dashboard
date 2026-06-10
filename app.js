@@ -368,14 +368,33 @@ function computeMatchWages(match) {
 }
 
 // ── 징계 (9조 8항: 불화·마찰) ──
-const DISCIPLINE_REASON_LABELS = { internal: '\uD300 \uB0B4 \uBD88\uD654', opponent: '\uC0C1\uB300\uD300 \uB9C8\uCC30', other: '\uAE30\uD0C0' };
+const DISCIPLINE_REASON_LABELS = {
+  internal: '\uD300 \uB0B4 \uBD88\uD654',
+  opponent: '\uC0C1\uB300\uD300 \uB9C8\uCC30',
+  late: '\uC9C0\uAC01',
+  no_show: '\uBB34\uB2E8 \uBD88\uCC38',
+  other: '\uAE30\uD0C0',
+};
+function disciplineLevelLabel(level) {
+  if (level === 30) return '\uC120\uC218 \uAC00\uCE58 -30\uC6D0';
+  if (level === 50) return '\uC120\uC218 \uAC00\uCE58 -50\uC6D0';
+  if (level >= 1 && level <= 3) return `${level}\uCC28`;
+  const amt = DISCIPLINE_AMOUNTS[level];
+  return amt ? `-\uC120\uC218 \uAC00\uCE58 ${amt.toLocaleString()}\uC6D0` : String(level);
+}
+function isSuspensionDiscipline(d) {
+  const lv = Number(d?.level);
+  return lv >= 1 && lv <= 3;
+}
 
 function getDisciplinesForPlayer(pid) {
   return disciplines.filter(d => d.pid == pid).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
+function getConflictDisciplineCount(pid) {
+  return disciplines.filter(d => d.pid == pid && isSuspensionDiscipline(d)).length;
+}
 function getSuggestedDisciplineLevel(pid) {
-  const count = disciplines.filter(d => d.pid == pid).length;
-  return Math.min(count + 1, 3);
+  return Math.min(getConflictDisciplineCount(pid) + 1, 3);
 }
 function disciplineReasonLabel(reason) {
   return DISCIPLINE_REASON_LABELS[reason] || reason || '\uAE30\uD0C0';
@@ -434,7 +453,7 @@ function hasSuspensionToday(pid) {
 function checkSuspensionWarning(pid) {
   if (!isAdmin) return;
   const today = new Date().toISOString().slice(0, 10);
-  const todayDisc = disciplines.filter(d => d.pid == pid && normalizeDate(d.date) === today);
+  const todayDisc = disciplines.filter(d => d.pid == pid && normalizeDate(d.date) === today && isSuspensionDiscipline(d));
   if (!todayDisc.length) return;
   const p = players.find(x => x.id === pid);
   const levels = todayDisc.map(d => d.level + '\uCC28').join(', ');
@@ -3467,7 +3486,7 @@ function renderPersonalStats(filtered) {
     const wageDisplay = hasValueHistory
       ? `<span class="${wageCls}" onclick="openValueHistory(${r.pid})">${r.wage > 0 ? r.wage.toLocaleString() + '&#xC6D0;' : '0&#xC6D0;'}</span>`
       : '—';
-    const discBtn = isAdmin ? `<button class="stats-discipline-btn" onclick="openDisciplineModal(${r.pid})" title="\uC9D5\uACC4 \uB4F1\uB85D">\u26A0</button>` : '';
+    const discBtn = isAdmin ? `<button class="stats-discipline-btn" onclick="openDisciplineModal(${r.pid})" title="\uD328\uB110\uD2F0 \uB4F1\uB85D">\u26A0</button>` : '';
     const discBadge = discCount ? `<span class="discipline-count-badge">${discCount}</span>` : '';
     const discActions = (discBtn || discBadge) ? `<span class="stat-discipline-actions">${discBtn}${discBadge}</span>` : '';
     const discCol = discCount > 0 ? discCount : '\u2014';
@@ -3575,7 +3594,7 @@ function renderDisciplineAdminList() {
     return `<div class="discipline-admin-row">
       <span class="discipline-admin-date">${formatDateDisplay(d.date)}</span>
       <span class="discipline-admin-name">${name}</span>
-      <span class="discipline-admin-level">${d.level}\uCC28</span>
+      <span class="discipline-admin-level">${disciplineLevelLabel(d.level)}</span>
       <span class="discipline-admin-amount">-${(d.amount || 0).toLocaleString()}\uC6D0</span>
       <span class="discipline-admin-reason">${disciplineReasonLabel(d.reason)}</span>
       ${settled}
@@ -3612,7 +3631,7 @@ function openValueHistory(pid) {
       date: d.date,
       type: 'discipline',
       amount: -(d.amount || 0),
-      detail: `${d.level}\uCC28 \uC9D5\uACC4 \u00B7 ${disciplineReasonLabel(d.reason)}${d.note ? ' \u00B7 ' + d.note : ''}`,
+      detail: `${disciplineLevelLabel(d.level)} \u00B7 ${disciplineReasonLabel(d.reason)}${d.note ? ' \u00B7 ' + d.note : ''}`,
     });
   });
   rows.sort((a, b) => (b.sortKey || '').localeCompare(a.sortKey || ''));
@@ -3641,9 +3660,9 @@ function updateDisciplineFormHint() {
   if (!sel || !hint) return;
   const pid = parseInt(sel.value, 10);
   if (!pid) { hint.textContent = ''; return; }
-  const count = disciplines.filter(d => d.pid == pid).length;
+  const count = getConflictDisciplineCount(pid);
   const suggested = getSuggestedDisciplineLevel(pid);
-  hint.textContent = `\uBD88\uD654\u00B7\uB9C8\uCC30 \uC9D5\uACC4 ${count}\uAC74 \u2192 \uAD8C\uC7A5: ${suggested}\uCC28 (-${DISCIPLINE_AMOUNTS[suggested].toLocaleString()}\uC6D0)`;
+  hint.textContent = `\uBD88\uD654\u00B7\uB9C8\uCC30 \uC774\uB825 ${count}\uAC74 \u2192 \uAD8C\uC7A5: ${suggested}\uCC28 (-${DISCIPLINE_AMOUNTS[suggested].toLocaleString()}\uC6D0)`;
   if (levelSel && !levelSel.dataset.userPicked) levelSel.value = String(suggested);
 }
 function openDisciplineModal(pid) {
@@ -3676,9 +3695,9 @@ function saveDiscipline() {
   const date = normalizeDate(document.getElementById('disciplineDate')?.value);
   const reason = document.getElementById('disciplineReason')?.value || 'other';
   const note = (document.getElementById('disciplineNote')?.value || '').trim();
-  if (!pid || !date || !level) { alert('\uC120\uC218, \uB0A0\uC9DC, \uCC28\uC218\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+  if (!pid || !date || !level) { alert('\uC120\uC218, \uB0A0\uC9DC, \uAE08\uC561 \uBC0F \uD56D\uBAA9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
   const amount = DISCIPLINE_AMOUNTS[level];
-  if (!amount) { alert('\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uCC28\uC218\uC785\uB2C8\uB2E4'); return; }
+  if (amount == null) { alert('\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD56D\uBAA9\uC785\uB2C8\uB2E4'); return; }
   const matchOnDate = matches.find(m => normalizeDate(m.date) === date);
   disciplines.push({
     id: Date.now(),
@@ -3720,7 +3739,7 @@ function openTreasurerDisciplineDetail(pid, from, to) {
   document.getElementById('disciplineDetailList').innerHTML = disciplineItems.map(d =>
     `<div class="discipline-detail-row">
       <span>${formatDateDisplay(d.date)}</span>
-      <span>${d.level}\uCC28</span>
+      <span>${disciplineLevelLabel(d.level)}</span>
       <span class="discipline-detail-minus">-${(d.amount || 0).toLocaleString()}\uC6D0</span>
       <span>${disciplineReasonLabel(d.reason)}</span>
       ${d.note ? `<span class="discipline-detail-note">${d.note}</span>` : ''}

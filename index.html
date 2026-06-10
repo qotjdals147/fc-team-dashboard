@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=74">
+<link rel="stylesheet" href="style.css?v=79">
 
 
 
@@ -649,6 +649,7 @@
 
 
 
+
     <span class="quarter-bar-label">&#xCFFC;&#xD130;</span>
 
 
@@ -657,7 +658,8 @@
 
 
 
-    <button class="quarter-btn" id="q1btn" onclick="switchQuarter(1)">1Q</button>
+
+    <div class="quarter-cols">
 
 
 
@@ -665,7 +667,8 @@
 
 
 
-    <button class="quarter-btn" id="q2btn" onclick="switchQuarter(2)">2Q</button>
+
+      <div class="quarter-col">
 
 
 
@@ -673,7 +676,8 @@
 
 
 
-    <button class="quarter-btn" id="q3btn" onclick="switchQuarter(3)">3Q</button>
+
+        <button class="quarter-btn" id="q1btn" onclick="switchQuarter(1)">1Q</button>
 
 
 
@@ -681,7 +685,126 @@
 
 
 
-    <button class="quarter-btn" id="q4btn" onclick="switchQuarter(4)">4Q</button>
+
+        <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="qc1btn" onclick="copyQuarterForward(1)" title="1Q &#x2192; 2Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+      </div>
+
+
+
+
+
+
+
+
+      <div class="quarter-col">
+
+
+
+
+
+
+
+
+        <button class="quarter-btn" id="q2btn" onclick="switchQuarter(2)">2Q</button>
+
+
+
+
+
+
+
+
+        <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="qc2btn" onclick="copyQuarterForward(2)" title="2Q &#x2192; 3Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+      </div>
+
+
+
+
+
+
+
+
+      <div class="quarter-col">
+
+
+
+
+
+
+
+
+        <button class="quarter-btn" id="q3btn" onclick="switchQuarter(3)">3Q</button>
+
+
+
+
+
+
+
+
+        <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="qc3btn" onclick="copyQuarterForward(3)" title="3Q &#x2192; 4Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+      </div>
+
+
+
+
+
+
+
+
+      <div class="quarter-col">
+
+
+
+
+
+
+
+
+        <button class="quarter-btn" id="q4btn" onclick="switchQuarter(4)">4Q</button>
+
+
+
+
+
+
+
+
+      </div>
+
+
+
+
+
+
+
+
+    </div>
+
 
 
 
@@ -697,7 +820,16 @@
 
 
 
+
   </div>
+
+
+
+
+
+
+
+
 
 
 
@@ -751,15 +883,151 @@
 
       <div id="presentQuarterBtns" class="present-quarter-btns">
 
-        <button class="quarter-btn" id="pq1btn" onclick="switchQuarter(1)">1Q</button>
 
-        <button class="quarter-btn" id="pq2btn" onclick="switchQuarter(2)">2Q</button>
 
-        <button class="quarter-btn" id="pq3btn" onclick="switchQuarter(3)">3Q</button>
 
-        <button class="quarter-btn" id="pq4btn" onclick="switchQuarter(4)">4Q</button>
+
+
+
+
+        <div class="quarter-col">
+
+
+
+
+
+
+
+
+          <button class="quarter-btn" id="pq1btn" onclick="switchQuarter(1)">1Q</button>
+
+
+
+
+
+
+
+
+          <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="pqc1btn" onclick="copyQuarterForward(1)" title="1Q &#x2192; 2Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+        <div class="quarter-col">
+
+
+
+
+
+
+
+
+          <button class="quarter-btn" id="pq2btn" onclick="switchQuarter(2)">2Q</button>
+
+
+
+
+
+
+
+
+          <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="pqc2btn" onclick="copyQuarterForward(2)" title="2Q &#x2192; 3Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+        <div class="quarter-col">
+
+
+
+
+
+
+
+
+          <button class="quarter-btn" id="pq3btn" onclick="switchQuarter(3)">3Q</button>
+
+
+
+
+
+
+
+
+          <button type="button" class="quarter-btn quarter-copy-arrow admin-only" id="pqc3btn" onclick="copyQuarterForward(3)" title="3Q &#x2192; 4Q">&#x2192;</button>
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+        <div class="quarter-col">
+
+
+
+
+
+
+
+
+          <button class="quarter-btn" id="pq4btn" onclick="switchQuarter(4)">4Q</button>
+
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
 
       </div>
+
+
 
 
 
@@ -3134,7 +3402,7 @@
 
 
 
-<script src="app.js?v=77"></script>
+<script src="app.js?v=79"></script>
 
 
 

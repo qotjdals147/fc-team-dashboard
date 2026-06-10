@@ -24,6 +24,7 @@ function togglePresentMode() {
     renderAvailPanel();
     if (presentMode) { applyPresentScales(); updatePresentPanel(); }
     updateAvailBtn();
+    updateQuarterCopyBtns();
   }));
 }
 
@@ -227,6 +228,7 @@ function applyAdminMode() {
   // 포메이션 뷰 레이블 업데이트
   const vl = document.getElementById('formationViewLabel');
   if (vl) vl.textContent = getFormation() || '';
+  updateQuarterCopyBtns();
   // 동적 렌더 요소 재렌더 (편집 버튼 포함 여부 반영)
   renderRoster();
   renderRecords();
@@ -520,31 +522,17 @@ function alertFormationRequired() {
 function isQuarterEmpty(qd) {
   return !qd || !qd.tokens?.length;
 }
-function copyQuarterFromPrev(q) {
-  const prev = quarterData[q - 1];
-  if (q <= 1 || !prev?.tokens?.length) return null;
-  return {
-    formation: prev.formation || inferFormationFromTokens(prev.tokens) || '',
-    tokens: JSON.parse(JSON.stringify(prev.tokens)),
+function syncActiveQuarterData() {
+  quarterData[activeQuarter] = {
+    formation: getFormation(),
+    tokens: JSON.parse(JSON.stringify(fieldTokens)),
   };
 }
 function switchQuarter(q) {
   if (q === activeQuarter) return;
-  // 현재 쿼터 상태를 quarterData에 저장
-  quarterData[activeQuarter] = {
-    formation: getFormation(),
-    tokens: JSON.parse(JSON.stringify(fieldTokens))
-  };
+  syncActiveQuarterData();
   activeQuarter = q;
-  let qd = quarterData[q];
-  // 선수 배치가 없으면 직전 쿼터 라인업 복사 (포메이션만 있고 비어 있는 경우 포함)
-  if (isQuarterEmpty(qd)) {
-    const copied = copyQuarterFromPrev(q);
-    if (copied) {
-      qd = copied;
-      quarterData[q] = qd;
-    }
-  }
+  const qd = quarterData[q];
   if (!isQuarterEmpty(qd)) {
     fieldTokens = normalizeFieldTokens(qd.tokens || []).map(t => ({...t, pos: migratePos(t.pos || '')}));
     const formation = resolveFormation(qd.formation, fieldTokens);
@@ -555,10 +543,64 @@ function switchQuarter(q) {
     setFormationSelect(qd?.formation || '');
   }
   updateQuarterButtons();
+  updateQuarterCopyBtns();
   drawFieldCanvas();
   renderField();
   renderBench();
   updatePresentPanel();
+}
+function getQuarterSnapshot(q) {
+  if (q === activeQuarter) {
+    return { formation: getFormation(), tokens: JSON.parse(JSON.stringify(fieldTokens)) };
+  }
+  const qd = quarterData[q];
+  if (!qd) return { formation: '', tokens: [] };
+  return {
+    formation: qd.formation || '',
+    tokens: JSON.parse(JSON.stringify(qd.tokens || [])),
+  };
+}
+function applyQuarterSnapshot(qd) {
+  fieldTokens = normalizeFieldTokens(qd.tokens || []).map(t => ({ ...t, pos: migratePos(t.pos || '') }));
+  const formation = resolveFormation(qd.formation, fieldTokens);
+  setFormationSelect(formation);
+  if (formation) reconcileFieldTokensToFormation();
+  drawFieldCanvas();
+  renderField();
+}
+/** fromQ 라인업 → 다음 쿼터로 복사 (쿼터 탭 전환과 분리, 현재 화면 유지) */
+function copyQuarterForward(fromQ) {
+  if (!isAdmin) return;
+  const toQ = fromQ + 1;
+  if (fromQ < 1 || fromQ > 3) return;
+  syncActiveQuarterData();
+  const src = getQuarterSnapshot(fromQ);
+  if (!src.tokens?.length) {
+    alert(`${fromQ}Q\uC5D0 \uBC30\uCE58\uB41C \uC120\uC218\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.`);
+    return;
+  }
+  const toQd = quarterData[toQ];
+  if (toQd?.tokens?.length) {
+    if (!confirm(`${toQ}Q\uC5D0 \uC774\uBBF8 \uBC30\uCE58\uAC00 \uC788\uC2B5\uB2C8\uB2E4. \uB36E\uC5B4\uC4F8\uAE4C\uC694?`)) return;
+  }
+  quarterData[toQ] = {
+    formation: src.formation || inferFormationFromTokens(src.tokens) || '',
+    tokens: JSON.parse(JSON.stringify(src.tokens)),
+  };
+  if (activeQuarter === toQ) applyQuarterSnapshot(quarterData[toQ]);
+  updateQuarterButtons();
+  updateQuarterCopyBtns();
+  saveFieldState();
+}
+function updateQuarterCopyBtns() {
+  for (let from = 1; from <= 3; from++) {
+    const has = getQuarterSnapshot(from).tokens?.length > 0;
+    ['qc', 'pqc'].forEach(prefix => {
+      const btn = document.getElementById(prefix + from + 'btn');
+      if (!btn) return;
+      btn.disabled = !isAdmin || !has;
+    });
+  }
 }
 function updateQuarterButtons() {
   for (let q = 1; q <= 4; q++) {
@@ -2449,6 +2491,7 @@ function renderField() {
     td.appendChild(el);
   });
   renderBench();
+  updateQuarterCopyBtns();
 }
 
 // ── 전역 드래그 ──

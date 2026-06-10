@@ -3573,7 +3573,7 @@ function renderDisciplineAdminList() {
       <span class="discipline-admin-date">${formatDateDisplay(d.date)}</span>
       <span class="discipline-admin-name">${name}</span>
       <span class="discipline-admin-level">${d.level}\uCC28</span>
-      <span class="discipline-admin-amount">-${(d.amount || 0).toLocaleString()}\uC6D0;</span>
+      <span class="discipline-admin-amount">-${(d.amount || 0).toLocaleString()}\uC6D0</span>
       <span class="discipline-admin-reason">${disciplineReasonLabel(d.reason)}</span>
       ${settled}
       <button class="discipline-del-btn" onclick="deleteDiscipline(${d.id})">\uC0AD\uC81C</button>
@@ -3624,9 +3624,9 @@ function openValueHistory(pid) {
       `<div class="stat-history-row ${r.type === 'discipline' ? 'stat-history-discipline' : ''}">
         <span class="stat-history-date">${formatDateDisplay(r.date)}</span>
         <span class="stat-history-detail">${r.detail}</span>
-        <span class="stat-history-count ${r.amount < 0 ? 'stat-history-minus' : ''}">${r.amount > 0 ? '+' : ''}${r.amount.toLocaleString()}\uC6D0;</span>
+        <span class="stat-history-count ${r.amount < 0 ? 'stat-history-minus' : ''}">${r.amount > 0 ? '+' : ''}${r.amount.toLocaleString()}\uC6D0</span>
       </div>`
-    ).join('') + `<div class="value-history-total">\uD569;&#xACC4; <strong>${net.toLocaleString()}\uC6D0;</strong> <span class="value-history-sub">(\uC218;&#xB2F9; ${gross.toLocaleString()} \u2212 \uC9D5;&#xACC4; ${disc.toLocaleString()})</span></div>`;
+    ).join('') + `<div class="value-history-total">\uD569\uACC4 <strong>${net.toLocaleString()}\uC6D0</strong> <span class="value-history-sub">(\uC218\uB2F9 ${gross.toLocaleString()} \u2212 \uC9D5\uACC4 ${disc.toLocaleString()})</span></div>`;
   }
   document.getElementById('statHistoryModal').classList.add('open');
 }
@@ -3700,7 +3700,7 @@ function deleteDiscipline(id) {
   const d = disciplines.find(x => x.id == id);
   if (!d) return;
   let msg = '\uC774 \uC9D5\uACC4 \uAE30\uB85D\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?';
-  if (d.settlementGroupId) msg = '\uC774;&#xBBF8; &#xB9AC;&#xC6CC;&#xB4DC; &#xC815;&#xC0B0;&#xC5D0; &#xBC18;&#xC601;&#xB41C; &#xC9D5;&#xACC4;&#xC785;&#xB2C8;&#xB2E4. \uC0AD;&#xC81C;&#xD558;&#xBA74; &#xC815;&#xC0B0; &#xAE08;&#xC561;&#xACFC; &#xB2E4;&#xB984;&#xC9C0;&#xB9CC; &#xACC4;&#xC18D;&#xD558;&#xC2DC;&#xACA0;&#xC2B5;&#xB2C8;&#xAE4C?';
+  if (d.settlementGroupId) msg = '\uC774\uBBF8 \uB9AC\uC6CC\uB4DC \uC815\uC0B0\uC5D0 \uBC18\uC601\uB41C \uC9D5\uACC4\uC785\uB2C8\uB2E4. \uC0AD\uC81C\uD558\uBA74 \uC815\uC0B0 \uAE08\uC561\uACFC \uB2E4\uB984\uC9C0\uB9CC \uACC4\uC18D\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?';
   if (!confirm(msg)) return;
   disciplines = disciplines.filter(x => x.id != id);
   persistDisciplines().catch(handleSaveError);
@@ -3713,12 +3713,12 @@ function openTreasurerDisciplineDetail(pid, from, to) {
   const p = players.find(pl => pl.id == pid);
   const { disciplineItems } = computeUnsettledWageBreakdown(pid, from, to);
   if (!disciplineItems.length) return;
-  document.getElementById('disciplineDetailTitle').textContent = `${p?.name || ''} \u2014 \uC9D5;&#xACC4; \uC0C1;&#xC138; (${formatDateDisplay(from)} ~ ${formatDateDisplay(to)})`;
+  document.getElementById('disciplineDetailTitle').textContent = `${p?.name || ''} \u2014 \uC9D5\uACC4 \uC0C1\uC138 (${formatDateDisplay(from)} ~ ${formatDateDisplay(to)})`;
   document.getElementById('disciplineDetailList').innerHTML = disciplineItems.map(d =>
     `<div class="discipline-detail-row">
       <span>${formatDateDisplay(d.date)}</span>
       <span>${d.level}\uCC28</span>
-      <span class="discipline-detail-minus">-${(d.amount || 0).toLocaleString()}\uC6D0;</span>
+      <span class="discipline-detail-minus">-${(d.amount || 0).toLocaleString()}\uC6D0</span>
       <span>${disciplineReasonLabel(d.reason)}</span>
       ${d.note ? `<span class="discipline-detail-note">${d.note}</span>` : ''}
     </div>`
@@ -4275,7 +4275,7 @@ function previewSettlement() {
           ${rows.map(r => {
             const existing = settlements.find(s => s.pid == r.p.id && s.startDate === from && s.endDate === to && s.status === 'done');
             const discCell = r.discipline > 0
-              ? `<button type="button" class="tr-discipline-link" onclick="openTreasurerDisciplineDetail(${r.p.id},'${from}','${to}')">-${r.discipline.toLocaleString()}\uC6D0; \u24D8</button>`
+              ? `<button type="button" class="tr-discipline-link" onclick="openTreasurerDisciplineDetail(${r.p.id},'${from}','${to}')">-${r.discipline.toLocaleString()}\uC6D0 \u24D8</button>`
               : '\u2014';
             return `<tr>
               <td>${r.p.jersey != null ? '#' + r.p.jersey + ' ' : ''}${r.p.name}</td>
@@ -4310,7 +4310,7 @@ function runSettlementBatch(from, to, pids) {
     if (net <= 0) return;
     const p = players.find(pl => pl.id == pid);
     if (discipline > 0) {
-      disciplineNotes.push(`${p?.name || pid}: \uC9D5\uACC4 -${discipline.toLocaleString()}\uC6D0; \u2192 \uC2E4\uC9C0\uAE09 ${net.toLocaleString()}\uC6D0;`);
+      disciplineNotes.push(`${p?.name || pid}: \uC9D5\uACC4 -${discipline.toLocaleString()}\uC6D0 \u2192 \uC2E4\uC9C0\uAE09 ${net.toLocaleString()}\uC6D0`);
     }
     settledItems.push({
       id: Date.now() + Math.random(),

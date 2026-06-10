@@ -374,6 +374,20 @@ function computePlayerTotalWage(pid) {
   }, 0);
 }
 let fieldTokens = [], matches = [], formationSaves = [], myTeamName = '', teamPhotoUrl = '';
+
+function getDisplayMyTeam(m) {
+  return (myTeamName || m?.myTeam || '우리 FC').trim();
+}
+function syncAllMatchTeamNames(name) {
+  const team = (name || myTeamName || '우리 FC').trim();
+  let changed = false;
+  matches = matches.map(m => {
+    if (m.myTeam === team) return m;
+    changed = true;
+    return { ...m, myTeam: team };
+  });
+  return changed;
+}
 let dues = [], expenses = [], settlements = [];
 let schedules = [], notices = [], dueExemptions = [], dueMemos = [];
 let trFilterYearMonth = null;
@@ -820,6 +834,9 @@ function applyRemoteData(data) {
   setFormationSelect(formation);
   if (formation) reconcileFieldTokensToFormation();
   updateQuarterButtons();
+  if (myTeamName && syncAllMatchTeamNames(myTeamName)) {
+    persistMatches().catch(() => {});
+  }
 }
 async function maybeMigrateLocal(data) {
   const remoteEmpty = !data.players?.length && !data.matches?.length && !data.saves?.length;
@@ -1414,8 +1431,16 @@ function clearTeamPhoto() {
 function editTeamName() {
   const name = prompt('팀 이름', myTeamName || '우리 FC');
   if (name === null) return;
-  myTeamName = name.trim() || '우리 FC';
-  persistMeta().then(() => renderHome()).catch(handleSaveError);
+  const newName = name.trim() || '우리 FC';
+  if (newName === myTeamName) return;
+  myTeamName = newName;
+  const matchesChanged = syncAllMatchTeamNames(newName);
+  const tasks = [persistMeta()];
+  if (matchesChanged) tasks.push(persistMatches());
+  Promise.all(tasks).then(() => {
+    renderHome();
+    renderRecords();
+  }).catch(handleSaveError);
 }
 
 // ── 선수 데이터 ──
@@ -2962,7 +2987,7 @@ function syncMatchFromFormation(){
 function openMatchModal(editId){
   matchEvents={};matchMom=null;matchBestDef=null;matchBestDef2=null;editingMatchId=editId||null;
   const em=editId?matches.find(m=>m.id===editId):null;
-  document.getElementById('matchMyTeam').value=em?.myTeam||myTeamName||'';
+  document.getElementById('matchMyTeam').value=myTeamName||'';
   document.getElementById('matchOppTeam').value=em?.oppTeam||'';
   document.getElementById('matchDate').value=normalizeDate(em?.date)||new Date().toISOString().slice(0,10);
   document.getElementById('matchScoreUs').value=em?.scoreUs??0;
@@ -3078,7 +3103,7 @@ function renderRecords(){
       <button class="btn-wage-toggle" onclick="toggleWageSection(${m.id})">&#x1F4B0; &#xC218;&#xB2F9; &#xD655;&#xC778; (+${wageTotal}&#xC6D0;)</button>`:'';
     return `<div class="match-card ${cardCls}">
       <div class="match-score-row">
-        <span class="match-team" style="text-align:right">${m.myTeam}</span>
+        <span class="match-team" style="text-align:right">${getDisplayMyTeam(m)}</span>
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
         <span class="match-team">${m.oppTeam}</span>
       </div>

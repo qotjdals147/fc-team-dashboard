@@ -357,7 +357,7 @@ function computeMatchWages(match) {
     if (win) items.push({ label:'&#xC2B9;&#xB9AC;', amount: wageRates.win });
     if (clean && DEF_POSITIONS.has(pos)) items.push({ label:'&#xD074;&#xB9B0;&#xC2DC;&#xD2B8;', amount: wageRates.cleansheet });
     const scorer = (match.scorers || []).find(s => s.pid == pid);
-    if (scorer?.goals)   items.push({ label:`&#xACF8;&#xD0A8;${scorer.goals>1?'&times;'+scorer.goals:''}`, amount: wageRates.goal * scorer.goals });
+    if (scorer?.goals)   items.push({ label:`&#xACE8;${scorer.goals>1?'&times;'+scorer.goals:''}`, amount: wageRates.goal * scorer.goals });
     if (scorer?.assists) items.push({ label:`&#xC5B4;&#xC2DC;${scorer.assists>1?'&times;'+scorer.assists:''}`, amount: wageRates.assist * scorer.assists });
     if (match.bestDef  == pid) items.push({ label:'&#xBCA0;&#xC2A4;&#xD2B8;&#xC218;&#xBE44;', amount: wageRates.bestDef });
     if (match.bestDef2 == pid) items.push({ label:'&#xC218;&#xBE44;&#xACF5;&#xD5CC;&#xC218;&#xB2F9;', amount: wageRates.bestDef2 });
@@ -3469,21 +3469,24 @@ function renderPersonalStats(filtered) {
       : '—';
     const discBtn = isAdmin ? `<button class="stats-discipline-btn" onclick="openDisciplineModal(${r.pid})" title="\uC9D5\uACC4 \uB4F1\uB85D">\u26A0</button>` : '';
     const discBadge = discCount ? `<span class="discipline-count-badge">${discCount}</span>` : '';
+    const discActions = (discBtn || discBadge) ? `<span class="stat-discipline-actions">${discBtn}${discBadge}</span>` : '';
+    const discCol = discCount > 0 ? discCount : '\u2014';
     return `<tr>
-      <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span>${discBadge}</span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''} ${discBtn}</td>
+      <td><span class="stat-rank-cell">${medal(r[sortKey])}<span class="stat-name">${r.name}</span></span>${r.jersey != null ? `<span class="stat-jersey">#${r.jersey}</span>` : ''}${discActions}</td>
       <td>${r.attendance}</td>
       <td><span class="${gCls}" onclick="openStatHistory(${r.pid},'goals')">${r.goals}</span></td>
       <td><span class="${aCls}" onclick="openStatHistory(${r.pid},'assists')">${r.assists}</span></td>
-      <td>${r.mom || '—'}</td>
+      <td>${r.mom || '\u2014'}</td>
+      <td class="stat-discipline-col">${discCol}</td>
       <td>${wageDisplay}</td>
     </tr>`;
   }).join('');
   const disciplineSection = isAdmin ? renderDisciplineAdminList() : '';
   return summary + `<table class="stats-table">
-    <thead><tr><th>&#xC120;&#xC218;</th><th>&#xCD9C;&#xC11D;</th><th>&#xACF8;</th><th>&#xC5B4;&#xC2DC;</th><th>MOM</th><th>&#x1F4B0; &#xC120;&#xC218; &#xAC00;&#xCE58;</th></tr></thead>
+    <thead><tr><th>&#xC120;&#xC218;</th><th>&#xCD9C;&#xC11D;</th><th>&#xACE8;</th><th>&#xC5B4;&#xC2DC;</th><th>MOM</th><th>&#xC9D5;&#xACC4;&#xC218;</th><th>&#x1F4B0; &#xC120;&#xC218; &#xAC00;&#xCE58;</th></tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <div style="font-size:10px;color:var(--text3)">&#xACF8;&#xB7C9;&#xC5B4;&#xC2DC; &#xC22B;&#xC790; &#xD074;&#xB9AD; &rarr; &#xACBD;&#xAE30;&#xBCC4; &#xD788;&#xC2A4;&#xD1A0;&#xB9AC; &middot; &#xAC00;&#xCE58; &#xD074;&#xB9AD; &rarr; &#xC218;&#xB2F9;/&#xC9D5;&#xACC4; &#xB0B4;&#xC5ED; &middot; &#xAC00;&#xCE58; = &#xC218;&#xB2F9; &#xD569; &minus; &#xC9D5;&#xACC4;</div>
+  <div style="font-size:10px;color:var(--text3)">&#xACE8;&#xB7;&#xC5B4;&#xC2DC; &#xC22B;&#xC790; &#xD074;&#xB9AD; &rarr; &#xACBD;&#xAE30;&#xBCC4; &#xD788;&#xC2A4;&#xD1A0;&#xB9AC; &middot; &#xAC00;&#xCE58; &#xD074;&#xB9AD; &rarr; &#xC218;&#xB2F9;/&#xC9D5;&#xACC4; &#xB0B4;&#xC5ED; &middot; &#xAC00;&#xCE58; = &#xC218;&#xB2F9; &#xD569; &minus; &#xC9D5;&#xACC4;</div>
   ${disciplineSection}`;
 }
 function renderTeamStats(filtered) {

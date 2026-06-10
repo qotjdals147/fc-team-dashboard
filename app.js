@@ -401,6 +401,12 @@ let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
 // 쿼터별 필드 상태: quarterData[1~4] = { formation, tokens } | null
 let quarterData = {1:null,2:null,3:null,4:null};
 let activeQuarter = 1;
+// 포메이션 저장·동기화 보호 (회의 중 되돌아감 방지)
+let _fieldSavePending = false;
+let _fieldPersistTimer = null;
+let _fieldRemoteBlockUntil = 0;
+const FIELD_PERSIST_DEBOUNCE_MS = 500;
+const FIELD_REMOTE_GRACE_MS = 3000;
 // 슬라이드쇼
 let photoUrls = [], photoInterval = 10, currentPhotoIdx = 0, photoTransforms = [];
 let _slideTimer = null;
@@ -522,15 +528,61 @@ function alertFormationRequired() {
 function isQuarterEmpty(qd) {
   return !qd || !qd.tokens?.length;
 }
-function syncActiveQuarterData() {
+function isFormationTabActive() {
+  return !!document.getElementById('tab-formation')?.classList.contains('active');
+}
+function shouldBlockRemoteFieldSync() {
+  if (drag.active || drag.pid != null) return true;
+  if (_fieldSavePending || Date.now() < _fieldRemoteBlockUntil) return true;
+  // 관리자가 포메 탭에서 회의·편집 중일 때 서버 데이터로 덮어쓰지 않음
+  if (isFormationTabActive() && isAdmin) return true;
+  return false;
+}
+function buildFieldPayload() {
+  const payload = { activeQuarter };
+  for (let q = 1; q <= 4; q++) {
+    const qd = quarterData[q] || {};
+    payload['q' + q + 'formation'] = qd.formation || '';
+    payload['q' + q + 'tokens'] = qd.tokens || [];
+  }
+  payload.formation = payload.q1formation || payload.q2formation || '';
+  payload.tokens = payload.q1tokens || [];
+  return payload;
+}
+function syncFieldToLocal() {
   quarterData[activeQuarter] = {
-    formation: getFormation(),
+    formation: getFormationForSave(),
     tokens: JSON.parse(JSON.stringify(fieldTokens)),
   };
+  if (quarterData[activeQuarter].formation) saveFormationLocal(quarterData[activeQuarter].formation);
+  const payload = buildFieldPayload();
+  localStorage.setItem('fc_field_quarters', JSON.stringify({ quarterData, activeQuarter }));
+  localStorage.setItem('fc_field', JSON.stringify(fieldTokens));
+  localStorage.setItem('fc_field_full', JSON.stringify({ formation: payload.formation, tokens: fieldTokens }));
 }
-function switchQuarter(q) {
+async function flushFieldPersist() {
+  if (_fieldPersistTimer) {
+    clearTimeout(_fieldPersistTimer);
+    _fieldPersistTimer = null;
+  }
+  syncFieldToLocal();
+  _fieldSavePending = true;
+  try {
+    await apiSavePartial({ field: buildFieldPayload() });
+  } finally {
+    _fieldSavePending = false;
+    _fieldRemoteBlockUntil = Date.now() + FIELD_REMOTE_GRACE_MS;
+  }
+}
+function syncActiveQuarterData() {
+  syncFieldToLocal();
+}
+async function switchQuarter(q) {
   if (q === activeQuarter) return;
-  syncActiveQuarterData();
+  syncFieldToLocal();
+  if (_fieldPersistTimer || _fieldSavePending) {
+    try { await flushFieldPersist(); } catch (e) { handleSaveError(e); }
+  }
   activeQuarter = q;
   const qd = quarterData[q];
   if (!isQuarterEmpty(qd)) {
@@ -862,29 +914,29 @@ function applyRemoteData(data) {
   });
   const field = data.field || {};
   const migrateT = t => ({...t, pos: migratePos(t.pos || '')});
-  if (field.q1tokens !== undefined) {
-    // 신규 쿼터 형식
-    for (let q = 1; q <= 4; q++) {
-      const rawTokens = field['q'+q+'tokens'] || [];
-      const formation = field['q'+q+'formation'] || '';
-      const tokens = normalizeFieldTokens(rawTokens).map(migrateT);
-      quarterData[q] = (!tokens.length && !formation) ? null : { formation, tokens };
+  if (!shouldBlockRemoteFieldSync()) {
+    if (field.q1tokens !== undefined) {
+      for (let q = 1; q <= 4; q++) {
+        const rawTokens = field['q'+q+'tokens'] || [];
+        const formation = field['q'+q+'formation'] || '';
+        const tokens = normalizeFieldTokens(rawTokens).map(migrateT);
+        quarterData[q] = (!tokens.length && !formation) ? null : { formation, tokens };
+      }
+      activeQuarter = field.activeQuarter || 1;
+    } else {
+      const tokens = normalizeFieldTokens(field.tokens || []).map(migrateT);
+      quarterData[1] = { formation: field.formation || '', tokens };
+      quarterData[2] = null; quarterData[3] = null; quarterData[4] = null;
+      activeQuarter = 1;
     }
-    activeQuarter = field.activeQuarter || 1;
-  } else {
-    // 구형식: q1으로만 적재
-    const tokens = normalizeFieldTokens(field.tokens || []).map(migrateT);
-    quarterData[1] = { formation: field.formation || '', tokens };
-    quarterData[2] = null; quarterData[3] = null; quarterData[4] = null;
-    activeQuarter = 1;
+    const qd = quarterData[activeQuarter] || { formation: '', tokens: [] };
+    fieldTokens = qd.tokens;
+    const formation = resolveFormation(qd.formation, fieldTokens);
+    if (formation) saveFormationLocal(formation);
+    setFormationSelect(formation);
+    if (formation) reconcileFieldTokensToFormation();
+    updateQuarterButtons();
   }
-  const qd = quarterData[activeQuarter] || {formation:'', tokens:[]};
-  fieldTokens = qd.tokens;
-  const formation = resolveFormation(qd.formation, fieldTokens);
-  if (formation) saveFormationLocal(formation);
-  setFormationSelect(formation);
-  if (formation) reconcileFieldTokensToFormation();
-  updateQuarterButtons();
   if (myTeamName && syncAllMatchTeamNames(myTeamName)) {
     persistMatches().catch(() => {});
   }
@@ -969,7 +1021,7 @@ async function bootstrapApp() {
     applyRemoteData(data);
     if (remoteEmpty && !hasLocalData()) {
       await persistPlayers();
-      await persistField();
+      await flushFieldPersist();
     }
   } catch (e) {
     console.error(e);
@@ -1004,26 +1056,14 @@ async function persistPlayers() {
   localStorage.setItem('fc_players', JSON.stringify(players));
   await apiSavePartial({ players });
 }
-async function persistField() {
-  // 현재 쿼터 상태를 quarterData에 동기화
-  quarterData[activeQuarter] = {
-    formation: getFormationForSave(),
-    tokens: JSON.parse(JSON.stringify(fieldTokens))
-  };
-  if (quarterData[activeQuarter].formation) saveFormationLocal(quarterData[activeQuarter].formation);
-  const payload = { activeQuarter };
-  for (let q = 1; q <= 4; q++) {
-    const qd = quarterData[q] || {};
-    payload['q'+q+'formation'] = qd.formation || '';
-    payload['q'+q+'tokens'] = qd.tokens || [];
-  }
-  // 하위 호환: q1을 기존 formation/tokens에도 미러링
-  payload.formation = payload.q1formation || payload.q2formation || '';
-  payload.tokens = payload.q1tokens || [];
-  localStorage.setItem('fc_field_quarters', JSON.stringify({quarterData, activeQuarter}));
-  localStorage.setItem('fc_field', JSON.stringify(fieldTokens));
-  localStorage.setItem('fc_field_full', JSON.stringify({formation: payload.formation, tokens: fieldTokens}));
-  await apiSavePartial({ field: payload });
+function persistField() {
+  syncFieldToLocal();
+  _fieldSavePending = true;
+  if (_fieldPersistTimer) clearTimeout(_fieldPersistTimer);
+  _fieldPersistTimer = setTimeout(() => {
+    _fieldPersistTimer = null;
+    flushFieldPersist().catch(handleSaveError);
+  }, FIELD_PERSIST_DEBOUNCE_MS);
 }
 async function persistMatches() { await apiSavePartial({ matches }); }
 async function persistSaves() { await apiSavePartial({ saves: formationSaves }); }
@@ -3395,8 +3435,9 @@ function refreshCurrentTab() {
 }
 
 async function pollRefresh() {
-  // 모달 열려있거나 드래그 중이면 이번 주기 스킵
-  if (isAnyModalOpen() || drag.active) return;
+  if (isAnyModalOpen()) return;
+  // 드래그·포메 저장 중에는 폴링 자체를 잠시 건너뜀 (되돌아감 방지)
+  if (drag.active || drag.pid != null || _fieldSavePending) return;
   try {
     // 폴링은 sync bar에 "로딩 중" 표시 없이 조용히 백그라운드 fetch
     const res = await fetch(`${SHEET_API.URL}?key=${encodeURIComponent(SHEET_API.KEY)}`);

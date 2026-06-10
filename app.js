@@ -2340,15 +2340,21 @@ async function exportFormationImage() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const team = myTeamName || '우리 FC';
   const formation = getFormation();
+  const qLabel = `${activeQuarter}Q`;
   const dateStr = new Date().toLocaleDateString('ko-KR');
   ctx.fillStyle = '#f0f0ee';
   ctx.font = `bold ${15 * sc}px sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(`⚽ ${team}`, pad, headerH / 2 - 8 * sc);
+  ctx.fillStyle = '#60a5fa';
+  ctx.font = `bold ${13 * sc}px sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.fillText(qLabel, canvas.width - pad, headerH / 2 - 8 * sc);
   ctx.fillStyle = '#a0a09d';
   ctx.font = `${11 * sc}px sans-serif`;
-  ctx.fillText(`${formation} · ${fieldTokens.length}/${MAX_FIELD}명 · ${dateStr}`, pad, headerH / 2 + 10 * sc);
+  ctx.textAlign = 'left';
+  ctx.fillText(`${qLabel} · ${formation} · ${fieldTokens.length}/${MAX_FIELD}명 · ${dateStr}`, pad, headerH / 2 + 10 * sc);
   const fieldCanvas = document.createElement('canvas');
   fieldCanvas.width = fieldW;
   fieldCanvas.height = fieldH;
@@ -2387,13 +2393,13 @@ async function exportFormationImage() {
     ctx.fillText(labels.join(' · '), pad, benchY + 26 * sc);
   }
   const safeTeam = team.replace(/[^\w가-힣]/g, '').slice(0, 12) || 'FC';
-  const filename = `formation-${formation}-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
+  const filename = `formation-${activeQuarter}Q-${formation}-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
   canvas.toBlob(async blob => {
     if (!blob) { alert('이미지 생성에 실패했습니다'); return; }
     const file = new File([blob], filename, { type: 'image/png' });
     if (navigator.share && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: `${team} ${formation}` });
+        await navigator.share({ files: [file], title: `${team} ${qLabel} ${formation}` });
         return;
       } catch (e) { if (e.name === 'AbortError') return; }
     }

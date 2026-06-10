@@ -263,7 +263,7 @@ body.presentation-mode .field-export-btn {
 .player-token { position:absolute; width:calc(64px * var(--tk)); transform:translate(-50%,-50%); touch-action:none; display:flex; flex-direction:column; align-items:center; user-select:none; z-index:10; cursor:pointer; }
 .player-token.dragging { cursor:grabbing; z-index:50; }
 .token-avatar-wrap { position:relative; width:calc(36px * var(--tk)); height:calc(36px * var(--tk)); margin-top:calc(10px * var(--tk)); }
-.token-star-arc { position:absolute; left:50%; top:calc(-12px * var(--tk)); width:calc(54px * var(--tk)); height:calc(20px * var(--tk)); transform:translateX(-50%); pointer-events:none; }
+.token-star-arc { position:absolute; left:50%; top:calc(-17px * var(--tk)); width:calc(54px * var(--tk)); height:calc(20px * var(--tk)); transform:translateX(-50%); pointer-events:none; }
 .token-star-arc .token-star { position:absolute; transform:translate(-50%,-50%); font-size:calc(9px * var(--tk)); line-height:1; }
 .token-star-arc.tier-1 .token-star { color:#b8bcc4; text-shadow:0 1px 2px rgba(0,0,0,0.8); }
 .token-star-arc.tier-2 .token-star { color:#d8dce6; text-shadow:0 0 3px rgba(255,255,255,0.4), 0 1px 2px rgba(0,0,0,0.8); }

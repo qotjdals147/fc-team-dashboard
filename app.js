@@ -2279,40 +2279,9 @@ function drawExportToken(ctx, p, t, cx, cy, tk) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (effectiveOvr != null) {
-    const n = ovrStarCount(effectiveOvr);
-    const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
-    const arcW = 54 * tk;
-    const arcLift = 5 * tk; // 화면 대비 PNG 별이 포지션 뱃지에 닿아 보이는 보정
-    const arcTop = wrapTop - 12 * tk - arcLift;
-    const arcH = 20 * tk;
-    ctx.font = `${9 * tk}px sans-serif`;
-    ctx.fillStyle = exportStarFill(starTier);
-    if (starTier === 'tier-4' || starTier === 'tier-5') {
-      ctx.shadowColor = 'rgba(255,215,0,0.75)';
-      ctx.shadowBlur = 4 * tk;
-    }
-    pts.forEach(([l, tv]) => {
-      const ax = cx - arcW / 2 + (l / 100) * arcW;
-      const ay = arcTop + (tv / 100) * arcH;
-      ctx.fillText('\u2605', ax, ay);
-    });
-    ctx.shadowBlur = 0;
-  }
+  const STAR_ARC_TOP = 17; // style.css .token-star-arc top과 동일 (12+5)
 
-  if (pos) {
-    ctx.font = `700 ${8 * tk}px sans-serif`;
-    const bw = Math.max(ctx.measureText(pos).width + 10 * tk, 22 * tk);
-    const bh = 12 * tk;
-    const bx = cx - bw / 2;
-    const badgeTop = circleCy - circleR - 9 * tk;
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    canvasRoundRect(ctx, bx, badgeTop, bw, bh, 4 * tk);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.fillText(pos, cx, badgeTop + bh / 2);
-  }
-
+  // 1) 원 — 화면과 같이 뱃지·별보다 아래 레이어
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.4)';
   ctx.shadowBlur = 6 * tk;
@@ -2330,6 +2299,41 @@ function drawExportToken(ctx, p, t, cx, cy, tk) {
   ctx.fillStyle = '#fff';
   ctx.font = `700 ${12 * tk}px sans-serif`;
   ctx.fillText(p.name.slice(0, 2), cx, circleCy);
+
+  // 2) 포지션 뱃지 — 원 위에 겹침 (z-index 2와 동일)
+  if (pos) {
+    ctx.font = `700 ${8 * tk}px sans-serif`;
+    const bw = Math.max(ctx.measureText(pos).width + 10 * tk, 22 * tk);
+    const bh = 12 * tk;
+    const bx = cx - bw / 2;
+    const badgeTop = circleCy - circleR - 9 * tk;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    canvasRoundRect(ctx, bx, badgeTop, bw, bh, 4 * tk);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(pos, cx, badgeTop + bh / 2);
+  }
+
+  // 3) 별 아치 — 최상단
+  if (effectiveOvr != null) {
+    const n = ovrStarCount(effectiveOvr);
+    const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
+    const arcW = 54 * tk;
+    const arcTop = wrapTop - STAR_ARC_TOP * tk;
+    const arcH = 20 * tk;
+    ctx.font = `${9 * tk}px sans-serif`;
+    ctx.fillStyle = exportStarFill(starTier);
+    if (starTier === 'tier-4' || starTier === 'tier-5') {
+      ctx.shadowColor = 'rgba(255,215,0,0.75)';
+      ctx.shadowBlur = 4 * tk;
+    }
+    pts.forEach(([l, tv]) => {
+      const ax = cx - arcW / 2 + (l / 100) * arcW;
+      const ay = arcTop + (tv / 100) * arcH;
+      ctx.fillText('\u2605', ax, ay);
+    });
+    ctx.shadowBlur = 0;
+  }
 
   if (ovr != null) {
     const pillTop = wrapTop + wrapH + pillMt;

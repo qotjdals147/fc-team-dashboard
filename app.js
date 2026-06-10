@@ -2283,7 +2283,8 @@ function drawExportToken(ctx, p, t, cx, cy, tk) {
     const n = ovrStarCount(effectiveOvr);
     const pts = STAR_ARC_LAYOUT[n] || STAR_ARC_LAYOUT[1];
     const arcW = 54 * tk;
-    const arcTop = wrapTop - 12 * tk;
+    const arcLift = 5 * tk; // 화면 대비 PNG 별이 포지션 뱃지에 닿아 보이는 보정
+    const arcTop = wrapTop - 12 * tk - arcLift;
     const arcH = 20 * tk;
     ctx.font = `${9 * tk}px sans-serif`;
     ctx.fillStyle = exportStarFill(starTier);

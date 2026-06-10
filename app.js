@@ -1563,7 +1563,7 @@ function ovrRowHtml(pos, v) {
     <span class="pos-label">${pos}</span>
     <input type="range" class="ovr-range" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
       oninput="syncOvrFromRange(this)">
-    <input type="number" class="ovr-number-input" data-pos="${pos}" min="1" max="100" step="1" value="${v}"
+    <input type="number" class="ovr-number-input" data-pos="${pos}" min="0" max="100" step="1" value="${v}"
       oninput="syncOvrFromNumber(this)">
     <span class="ovr-star-preview">${ovrStars(parseInt(v))}</span>
   </div>`;
@@ -1571,14 +1571,40 @@ function ovrRowHtml(pos, v) {
 function syncOvrFromRange(el) {
   const row = el.closest('.ovr-row');
   row.querySelector('.ovr-number-input').value = el.value;
-  row.querySelector('.ovr-star-preview').innerHTML = ovrStars(parseInt(el.value));
+  row.querySelector('.ovr-star-preview').innerHTML = ovrStars(parseInt(el.value, 10));
 }
 function syncOvrFromNumber(el) {
-  let v = Math.min(100, Math.max(1, parseInt(el.value)||1));
-  el.value = v;
   const row = el.closest('.ovr-row');
-  row.querySelector('.ovr-range').value = v;
-  row.querySelector('.ovr-star-preview').innerHTML = ovrStars(v);
+  const preview = row.querySelector('.ovr-star-preview');
+  const range = row.querySelector('.ovr-range');
+  const raw = el.value.trim();
+  if (raw === '') {
+    preview.innerHTML = '';
+    return;
+  }
+  const v = parseInt(raw, 10);
+  if (Number.isNaN(v)) return;
+  if (v >= 1 && v <= 100) {
+    range.value = v;
+    preview.innerHTML = ovrStars(v);
+  } else {
+    preview.innerHTML = v === 0 ? '' : '';
+  }
+}
+function validatePlayerOvrInputs() {
+  const inputs = document.getElementById('ovrInputs').querySelectorAll('.ovr-number-input');
+  for (const inp of inputs) {
+    const pos = inp.dataset.pos;
+    const raw = inp.value.trim();
+    const v = parseInt(raw, 10);
+    if (raw === '' || Number.isNaN(v) || v < 1 || v > 100) {
+      alert(`${pos} OVR은 1~100 사이로 입력해주세요.`);
+      inp.focus();
+      inp.select();
+      return false;
+    }
+  }
+  return true;
 }
 function updateOvrInputs() {
   const selected = ALL_POS.filter(p=>document.getElementById('pcb_'+p)?.checked);
@@ -1634,8 +1660,11 @@ function savePlayer() {
   if(!name){alert('이름을 입력해주세요');return;}
   const jersey=parseInt(document.getElementById('inputJersey').value)||null;
   const positions=ALL_POS.filter(p=>document.getElementById('pcb_'+p)?.checked);
+  if (positions.length && !validatePlayerOvrInputs()) return;
   const ovr={};
-  document.getElementById('ovrInputs').querySelectorAll('.ovr-number-input').forEach(r=>{ovr[r.dataset.pos]=parseInt(r.value)||50;});
+  document.getElementById('ovrInputs').querySelectorAll('.ovr-number-input').forEach(r=>{
+    ovr[r.dataset.pos] = parseInt(r.value.trim(), 10);
+  });
   const formBonus=parseInt(document.getElementById('inputFormBonus').value)||0;
   const isMercenary=!!(document.getElementById('inputMercenary')?.checked);
   if(editingId){

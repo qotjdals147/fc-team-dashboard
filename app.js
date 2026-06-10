@@ -2454,8 +2454,9 @@ async function exportFormationImage() {
   ctx.lineWidth = 1 * sc;
   canvasRoundRect(ctx, pad, fieldY, fieldW, fieldH, cornerR);
   ctx.stroke();
-  const safeTeam = team.replace(/[^\w가-힣]/g, '').slice(0, 12) || 'FC';
-  const filename = `formation-${activeQuarter}Q-${formation}-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
+  const now = new Date();
+  const dateSlug = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}_${String(now.getDate()).padStart(2, '0')}`;
+  const filename = `[${activeQuarter}Q]${dateSlug}(${formation}).png`;
   canvas.toBlob(blob => {
     if (!blob) { alert('이미지 생성에 실패했습니다'); return; }
     downloadPngBlob(blob, filename);

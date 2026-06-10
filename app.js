@@ -2448,8 +2448,10 @@ function tokenXYForExport(t, slots) {
 function formationExportFilename(q, formation) {
   const now = new Date();
   const dateSlug = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}_${String(now.getDate()).padStart(2, '0')}`;
-  const order = String(q).padStart(2, '0');
-  return `${order}_[${q}Q]${dateSlug}(${formation}).png`;
+  return `[${q}Q]${dateSlug}(${formation}).png`;
+}
+function canvasToPngBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }
 function renderFormationExportCanvas(q) {
   const { formation, tokens, labels, slots } = getQuarterExportSnapshot(q);
@@ -2528,18 +2530,33 @@ async function exportFormationImage() {
   if (!fieldTokens.length) { alert('배치된 선수가 없습니다'); return; }
   await exportFormationImageForQuarter(activeQuarter);
 }
-/** 카톡·갤러리 최신순 묶음보내기: 4→1 역순 저장 → 1Q가 마지막(최신) 파일 */
+/** 4쿼터 일괄 — 카톡 순서: 공유 시트에 1Q→4Q 순으로 files 전달 (다운로드만으론 순서 보장 어려움) */
 async function exportAllQuarterImages() {
   const quarters = [1, 2, 3, 4].filter(q => getQuarterExportSnapshot(q).tokens.length > 0);
   if (!quarters.length) { alert('배치된 선수가 없습니다'); return; }
-  if (quarters.length === 1) {
-    await exportFormationImageForQuarter(quarters[0]);
-    return;
+  const items = [];
+  for (const q of quarters) {
+    const rendered = renderFormationExportCanvas(q);
+    if (!rendered) continue;
+    const blob = await canvasToPngBlob(rendered.canvas);
+    if (!blob) continue;
+    items.push({ q, blob, formation: rendered.formation });
   }
-  const order = [...quarters].sort((a, b) => b - a);
-  for (let i = 0; i < order.length; i++) {
-    await exportFormationImageForQuarter(order[i]);
-    if (i < order.length - 1) await new Promise(r => setTimeout(r, 450));
+  if (!items.length) { alert('이미지 생성에 실패했습니다'); return; }
+  const files = items.map(it => new File(
+    [it.blob],
+    formationExportFilename(it.q, it.formation),
+    { type: 'image/png' }
+  ));
+  if (files.length > 1 && navigator.share && navigator.canShare?.({ files })) {
+    try {
+      await navigator.share({ files, title: `${myTeamName || 'FC'} \uD3EC\uBA54` });
+      return;
+    } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  for (let i = 0; i < items.length; i++) {
+    downloadPngBlob(items[i].blob, formationExportFilename(items[i].q, items[i].formation));
+    if (i < items.length - 1) await new Promise(r => setTimeout(r, 600));
   }
 }
 function findNearestSlot(excludePid,nx,ny){

@@ -112,6 +112,7 @@ body:not(.is-admin) .admin-only { display:none !important; }
   background:var(--bg2); color:var(--text1); font-size:13px; font-weight:700; cursor:pointer;
 }
 .home-quick-btn:hover { background:var(--bg); border-color:var(--text2); }
+.home-quick-btn-rules { font-size:11px; line-height:1.25; padding:9px 10px; }
 .home-schedule-card {
   background:var(--bg); border:1px solid var(--border); border-radius:10px;
   padding:12px 14px; margin-bottom:8px;
@@ -121,6 +122,12 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .home-schedule-note { font-size:12px; color:var(--text2); margin-top:4px; }
 .home-schedule-admin { margin-top:8px; display:flex; gap:6px; }
 .home-notice-item { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+.home-notice-head-row { display:flex; align-items:stretch; }
+.home-notice-reorder {
+  display:flex; flex-direction:column; justify-content:center; gap:1px;
+  padding:6px 4px 6px 10px; flex-shrink:0;
+}
+.home-notice-head-row .home-notice-head { flex:1; min-width:0; }
 .home-notice-head {
   width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px;
   padding:12px 14px; background:var(--bg); border:none; cursor:pointer; text-align:left;
@@ -129,7 +136,7 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .home-notice-date { font-size:11px; color:var(--text3); flex-shrink:0; }
 .home-notice-body { padding:0 14px 12px; font-size:13px; color:var(--text2); line-height:1.5; }
 .home-notice-admin { padding:0 14px 10px; display:flex; gap:6px; }
-.home-notice-item.open .home-notice-head { border-bottom:1px solid var(--border); }
+.home-notice-item.open .home-notice-head-row { border-bottom:1px solid var(--border); }
 .home-team-name { font-size:18px; font-weight:700; flex:1; }
 .btn-team-edit { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); cursor:pointer; font-size:13px; }
 .btn-team-edit:hover { background:var(--bg2); }

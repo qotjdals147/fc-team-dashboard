@@ -1373,23 +1373,37 @@ function closeNoticeModal() {
 function renderNoticeModalContent() {
   const el = document.getElementById('noticeModalBody');
   if (!el) return;
-  const sorted = notices.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  el.innerHTML = sorted.map(n => {
+  el.innerHTML = notices.map((n, i) => {
     const open = openNoticeId == n.id;
+    const reorder = isAdmin ? `<div class="home-notice-reorder">
+        <button type="button" class="btn-num" onclick="moveNotice(${n.id},-1)" ${i === 0 ? 'disabled' : ''} title="\uC704\uB85C">\u25B2</button>
+        <button type="button" class="btn-num" onclick="moveNotice(${n.id},1)" ${i === notices.length - 1 ? 'disabled' : ''} title="\uC544\uB798\uB85C">\u25BC</button>
+      </div>` : '';
     return `<div class="home-notice-item ${open ? 'open' : ''}">
-      <button type="button" class="home-notice-head" onclick="toggleNoticeItem(${n.id})">
-        <span class="home-notice-title">${n.title || '\uC81C\uBAA9 \uC5C6\uC74C'}</span>
-        <span class="home-notice-date">${formatDateDisplay(n.date)}</span>
-      </button>
+      <div class="home-notice-head-row">
+        ${reorder}
+        <button type="button" class="home-notice-head" onclick="toggleNoticeItem(${n.id})">
+          <span class="home-notice-title">${n.title || '\uC81C\uBAA9 \uC5C6\uC74C'}</span>
+          <span class="home-notice-date">${formatDateDisplay(n.date)}</span>
+        </button>
+      </div>
       ${open ? `<div class="home-notice-body">${(n.body || '').replace(/\n/g, '<br>')}</div>` : ''}
       ${isAdmin ? `<div class="home-notice-admin">
         <button class="tr-btn-sm" onclick="editNotice(${n.id})">\uC218\uC815</button>
         <button class="tr-btn-sm danger" onclick="deleteNotice(${n.id})">\uC0AD\uC81C</button>
       </div>` : ''}
     </div>`;
-  }).join('') || '<div class="tr-empty">\uB4F1\uB85D\uB41C \uACF5\uC9C0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+  }).join('') || '<div class="tr-empty">\uB4F1\uB85D\uB41C \uAE00\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
   const addBtn = document.getElementById('noticeAddBtn');
   if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+}
+function moveNotice(id, dir) {
+  const idx = notices.findIndex(n => n.id == id);
+  const ni = idx + dir;
+  if (idx < 0 || ni < 0 || ni >= notices.length) return;
+  [notices[idx], notices[ni]] = [notices[ni], notices[idx]];
+  persistNotices().catch(handleSaveError);
+  renderNoticeModalContent();
 }
 function toggleNoticeItem(id) {
   openNoticeId = openNoticeId == id ? null : id;
@@ -1426,7 +1440,7 @@ function saveNoticeItem() {
   renderNoticeModalContent();
 }
 function deleteNotice(id) {
-  if (!confirm('\uC774 \uACF5\uC9C0\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
+  if (!confirm('\uC774 \uAE00\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
   notices = notices.filter(n => n.id != id);
   if (openNoticeId == id) openNoticeId = null;
   persistNotices().catch(handleSaveError);
@@ -1438,7 +1452,7 @@ function checkNewNoticeAlert() {
   if (localStorage.getItem('fc_notice_opened_date') === today) return;
   const count = notices.filter(n => normalizeDate(n.date) === today).length;
   if (count > 0) {
-    alert(`\uC624\uB298\uC758 \uC0C8 \uACF5\uC9C0\uAC00 ${count}\uAC74 \uC788\uC2B5\uB2C8\uB2E4.\n\u300C\uACF5\uC9C0\uC0AC\uD56D\u300D\uC5D0\uC11C \uD655\uC778\uD574 \uC8FC\uC138\uC694.`);
+    alert(`\uC624\uB298 \uC0C8 \uAE00\uC774 ${count}\uAC74 \uC788\uC2B5\uB2C8\uB2E4.\n\u300C\uD68C\uCE59 \uBC0F \uC0AC\uC774\uD2B8 \uC18C\uAC1C\u300D\uC5D0\uC11C \uD655\uC778\uD574 \uC8FC\uC138\uC694.`);
   }
 }
 function openPhotoUrlModal() {

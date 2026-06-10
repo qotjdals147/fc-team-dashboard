@@ -240,8 +240,11 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .btn-reset-field { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); font-size:12px; cursor:pointer; white-space:nowrap; }
 .btn-save-field { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); font-size:12px; cursor:pointer; white-space:nowrap; }
 .btn-save-field:hover { background:var(--bg2); }
-.field-export-btn {
+.field-export-btns {
   position:absolute; bottom:10px; right:10px; z-index:25;
+  display:flex; flex-direction:column; align-items:flex-end; gap:6px;
+}
+.field-export-btn {
   display:inline-flex; align-items:center; justify-content:center;
   min-width:36px; min-height:36px; padding:6px 10px;
   border:1px solid rgba(255,255,255,0.35); border-radius:10px;
@@ -250,8 +253,9 @@ body:not(.is-admin) .admin-only { display:none !important; }
 }
 .field-export-btn:hover { background:rgba(0,0,0,0.62); border-color:rgba(255,255,255,0.55); }
 .field-export-btn .ti { font-size:18px; line-height:1; }
+.field-export-btn-all { font-size:10px; font-weight:700; letter-spacing:0.3px; min-width:36px; padding:6px 8px; }
+body.presentation-mode .field-export-btns { bottom:12px; right:12px; }
 body.presentation-mode .field-export-btn {
-  bottom:12px; right:12px;
   background:rgba(0,0,0,0.55); border-color:rgba(255,255,255,0.4);
 }
 .field-wrap { flex:1; min-height:0; display:flex; justify-content:center; align-items:center; padding:4px 12px; overflow:hidden; }

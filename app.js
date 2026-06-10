@@ -2429,9 +2429,31 @@ function downloadPngBlob(blob, filename) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 200);
 }
-async function exportFormationImage() {
-  if (!isFormationSelected()) { alertFormationRequired(); return; }
-  if (!fieldTokens.length) { alert('배치된 선수가 없습니다'); return; }
+function getQuarterExportSnapshot(q) {
+  const qd = q === activeQuarter
+    ? { formation: getFormation(), tokens: fieldTokens }
+    : (quarterData[q] || { formation: '', tokens: [] });
+  return {
+    formation: qd.formation || '',
+    tokens: qd.tokens || [],
+    labels: FORMATION_POS_LABELS[qd.formation] || [],
+    slots: FORMATIONS[qd.formation] || [],
+  };
+}
+function tokenXYForExport(t, slots) {
+  if (t.freeX != null && t.freeY != null) return { x: t.freeX, y: t.freeY };
+  if (t.slotIdx >= 0 && slots[t.slotIdx]) return { x: slots[t.slotIdx][0], y: slots[t.slotIdx][1] };
+  return { x: 0.5, y: 0.5 };
+}
+function formationExportFilename(q, formation) {
+  const now = new Date();
+  const dateSlug = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}_${String(now.getDate()).padStart(2, '0')}`;
+  const order = String(q).padStart(2, '0');
+  return `${order}_[${q}Q]${dateSlug}(${formation}).png`;
+}
+function renderFormationExportCanvas(q) {
+  const { formation, tokens, labels, slots } = getQuarterExportSnapshot(q);
+  if (!formation || !FORMATIONS[formation] || !tokens.length) return null;
   const sc = 2;
   const exportTk = sc * Math.min(1, Math.max(0.6, 420 / 340));
   const fieldW = 420 * sc;
@@ -2445,8 +2467,7 @@ async function exportFormationImage() {
   ctx.fillStyle = '#141412';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const team = myTeamName || '우리 FC';
-  const formation = getFormation();
-  const qLabel = `${activeQuarter}Q`;
+  const qLabel = `${q}Q`;
   const dateStr = new Date().toLocaleDateString('ko-KR');
   ctx.fillStyle = '#f0f0ee';
   ctx.font = `bold ${15 * sc}px sans-serif`;
@@ -2460,7 +2481,7 @@ async function exportFormationImage() {
   ctx.fillStyle = '#a0a09d';
   ctx.font = `${11 * sc}px sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText(`${qLabel} · ${formation} · ${fieldTokens.length}/${MAX_FIELD}명 · ${dateStr}`, pad, headerH / 2 + 10 * sc);
+  ctx.fillText(`${qLabel} · ${formation} · ${tokens.length}/${MAX_FIELD}명 · ${dateStr}`, pad, headerH / 2 + 10 * sc);
   const fieldCanvas = document.createElement('canvas');
   fieldCanvas.width = fieldW;
   fieldCanvas.height = fieldH;
@@ -2471,25 +2492,55 @@ async function exportFormationImage() {
   ctx.save();
   canvasRoundRect(ctx, pad, fieldY, fieldW, fieldH, cornerR);
   ctx.clip();
-  fieldTokens.forEach(t => {
+  tokens.forEach(t => {
     const p = players.find(x => x.id === t.pid);
     if (!p) return;
-    const { x, y } = tokenXY(t);
+    const slotLabel = (t.slotIdx >= 0 && labels[t.slotIdx]) ? labels[t.slotIdx] : '';
+    const pos = t.pos || slotLabel || p.positions[0] || '';
+    const exportToken = pos !== t.pos ? { ...t, pos } : t;
+    const { x, y } = tokenXYForExport(t, slots);
     const { x: px, y: py } = normToCanvasPx(x, y, fieldW, fieldH);
-    drawExportToken(ctx, p, t, pad + px, fieldY + py, exportTk);
+    drawExportToken(ctx, p, exportToken, pad + px, fieldY + py, exportTk);
   });
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1 * sc;
   canvasRoundRect(ctx, pad, fieldY, fieldW, fieldH, cornerR);
   ctx.stroke();
-  const now = new Date();
-  const dateSlug = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}_${String(now.getDate()).padStart(2, '0')}`;
-  const filename = `[${activeQuarter}Q]${dateSlug}(${formation}).png`;
-  canvas.toBlob(blob => {
-    if (!blob) { alert('이미지 생성에 실패했습니다'); return; }
-    downloadPngBlob(blob, filename);
-  }, 'image/png');
+  return { canvas, formation };
+}
+function downloadFormationCanvas(canvas, q, formation) {
+  return new Promise(resolve => {
+    canvas.toBlob(blob => {
+      if (!blob) { alert('이미지 생성에 실패했습니다'); resolve(false); return; }
+      downloadPngBlob(blob, formationExportFilename(q, formation));
+      resolve(true);
+    }, 'image/png');
+  });
+}
+async function exportFormationImageForQuarter(q) {
+  const rendered = renderFormationExportCanvas(q);
+  if (!rendered) return false;
+  return downloadFormationCanvas(rendered.canvas, q, rendered.formation);
+}
+async function exportFormationImage() {
+  if (!isFormationSelected()) { alertFormationRequired(); return; }
+  if (!fieldTokens.length) { alert('배치된 선수가 없습니다'); return; }
+  await exportFormationImageForQuarter(activeQuarter);
+}
+/** 카톡·갤러리 최신순 묶음보내기: 4→1 역순 저장 → 1Q가 마지막(최신) 파일 */
+async function exportAllQuarterImages() {
+  const quarters = [1, 2, 3, 4].filter(q => getQuarterExportSnapshot(q).tokens.length > 0);
+  if (!quarters.length) { alert('배치된 선수가 없습니다'); return; }
+  if (quarters.length === 1) {
+    await exportFormationImageForQuarter(quarters[0]);
+    return;
+  }
+  const order = [...quarters].sort((a, b) => b - a);
+  for (let i = 0; i < order.length; i++) {
+    await exportFormationImageForQuarter(order[i]);
+    if (i < order.length - 1) await new Promise(r => setTimeout(r, 450));
+  }
 }
 function findNearestSlot(excludePid,nx,ny){
   const slots=getSlots();

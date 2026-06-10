@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=86">
+<link rel="stylesheet" href="style.css?v=89">
 
 
 
@@ -1062,7 +1062,10 @@
 
 
 
-      <button type="button" class="field-export-btn admin-only" onclick="exportFormationImage()" title="쿼터 이미지 저장"><i class="ti ti-download"></i></button>
+      <div class="field-export-btns admin-only">
+        <button type="button" class="field-export-btn field-export-btn-all" onclick="exportAllQuarterImages()" title="4쿼터 한번에 저장 (카톡 순서용)">ALL</button>
+        <button type="button" class="field-export-btn" onclick="exportFormationImage()" title="현재 쿼터 이미지 저장"><i class="ti ti-download"></i></button>
+      </div>
 
 
 
@@ -3415,7 +3418,7 @@
 
 
 
-<script src="app.js?v=88"></script>
+<script src="app.js?v=89"></script>
 
 
 

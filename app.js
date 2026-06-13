@@ -894,6 +894,8 @@ function applyRemoteData(data) {
     .map(p => normalizePlayerOvr(migratePlayerPos({...p})));
   matches = normalizeMatchDates(data.matches || []);
   myTeamName = data.meta?.myTeam || '';
+  if (!myTeamName) myTeamName = localStorage.getItem('fc_myteam') || '';
+  if (myTeamName) localStorage.setItem('fc_myteam', myTeamName);
   // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
   syncMetaPasswords(data.meta);
   // 총무 데이터 (시트 Date/ISO → YYYY-MM-DD)
@@ -911,15 +913,22 @@ function applyRemoteData(data) {
   }
   // 슬라이드쇼 URLs
   const rawUrls = data.meta?.teamPhotoUrls;
-  if (rawUrls) {
+  if (rawUrls && rawUrls !== '[]') {
     try { photoUrls = typeof rawUrls === 'string' ? JSON.parse(rawUrls) : rawUrls; } catch(e) { photoUrls = []; }
   } else {
     const single = normalizePhotoUrl(data.meta?.teamPhotoUrl || '');
     photoUrls = single ? [single] : [];
   }
   photoUrls = photoUrls.map(u => normalizePhotoUrl(u)).filter(Boolean);
+  if (!photoUrls.length) {
+    const rawPhotosL = localStorage.getItem('fc_team_photos');
+    if (rawPhotosL) { try { photoUrls = JSON.parse(rawPhotosL); } catch(e) {} }
+    else { const s = localStorage.getItem('fc_team_photo'); if (s) photoUrls = [s]; }
+    photoUrls = photoUrls.map(u => normalizePhotoUrl(u)).filter(Boolean);
+  }
   teamPhotoUrl = photoUrls[0] || '';
   if (teamPhotoUrl) localStorage.setItem('fc_team_photo', teamPhotoUrl);
+  if (photoUrls.length) localStorage.setItem('fc_team_photos', JSON.stringify(photoUrls));
   // 슬라이드 간격
   const rawInterval = data.meta?.photoInterval;
   if (rawInterval != null) photoInterval = Math.max(3, Number(rawInterval) || 10);
@@ -929,7 +938,11 @@ function applyRemoteData(data) {
     try { photoTransforms = typeof rawPT === 'string' ? JSON.parse(rawPT) : rawPT; } catch(e) { photoTransforms = []; }
   } else {
     const st = data.meta?.teamPhotoTransform;
-    photoTransforms = st && typeof st === 'object' ? [{ x: st.x||0, y: st.y||0, scale: st.scale||1 }] : [];
+    if (typeof st === 'string' && st) {
+      try { photoTransforms = [JSON.parse(st)]; } catch(e) { photoTransforms = []; }
+    } else {
+      photoTransforms = st && typeof st === 'object' ? [{ x: st.x||0, y: st.y||0, scale: st.scale||1 }] : [];
+    }
     const lt = localStorage.getItem('fc_photo_transform');
     if (!photoTransforms.length && lt) try { photoTransforms = [JSON.parse(lt)]; } catch(e) {}
   }
@@ -1008,7 +1021,11 @@ async function maybeMigrateLocal(data) {
     matches: lm ? JSON.parse(lm) : [],
     field: lf ? { formation: localStorage.getItem('fc_formation') || '4-3-3', tokens: JSON.parse(lf) } : (data.field || { formation: '4-3-3', tokens: [] }),
     saves: ls ? JSON.parse(ls) : [],
-    meta: { myTeam: lt || '' },
+    meta: {
+      myTeam: lt || '',
+      teamPhotoUrls: localStorage.getItem('fc_team_photos') || '',
+      teamPhotoUrl: localStorage.getItem('fc_team_photo') || '',
+    },
   };
   await apiSavePartial(migrated);
   return migrated;
@@ -1136,17 +1153,18 @@ async function persistMeta() {
   const treasurerPw  = localStorage.getItem('fc_treasurer_pw')  || undefined;
   photoTransforms[currentPhotoIdx] = { ...photoTransform };
   const meta = {
-    myTeam: myTeamName,
+    myTeam: myTeamName || localStorage.getItem('fc_myteam') || '',
     teamPhotoUrl: photoUrls[0] || '',
     teamPhotoUrls: JSON.stringify(photoUrls),
-    photoInterval: photoInterval,
-    teamPhotoTransform: photoTransform,
+    photoInterval: String(photoInterval),
+    teamPhotoTransform: JSON.stringify(photoTransform),
     teamPhotoTransforms: JSON.stringify(photoTransforms),
     ...(adminPw     ? { adminPw }     : {}),
     ...(treasurerPw ? { treasurerPw } : {}),
     presentScales: JSON.stringify(presentScales),
   };
   await apiSavePartial({ meta });
+  localStorage.setItem('fc_myteam', myTeamName || '');
   localStorage.setItem('fc_team_photos', JSON.stringify(photoUrls));
   localStorage.setItem('fc_photo_transforms', JSON.stringify(photoTransforms));
   localStorage.setItem('fc_photo_interval', String(photoInterval));
@@ -3826,11 +3844,8 @@ function refreshCurrentTab() {
 async function pollRefresh() {
   if (isAnyModalOpen() || drag.active) return;
   try {
-    // 폴링은 sync bar에 "로딩 중" 표시 없이 조용히 백그라운드 fetch
-    const res = await fetch(`${SHEET_API.URL}?key=${encodeURIComponent(SHEET_API.KEY)}`);
-    const json = await res.json();
-    if (!json.ok) return;
-    applyRemoteData(json.data);
+    const data = await apiLoadAll(true);
+    applyRemoteData(data);
     refreshCurrentTab();
     updateSyncBar('ok', '동기화됨');
   } catch(e) {

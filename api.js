@@ -12,9 +12,25 @@ const SB = {
   url: (table, query = '') => `${SUPABASE_URL}/rest/v1/${table}${query}`,
 };
 
+const META_PRESERVE_IF_EMPTY = new Set(['myTeam', 'teamPhotoUrl', 'teamPhotoUrls']);
+
 let _syncHandler = null;
 function setSyncHandler(fn) { _syncHandler = fn; }
 function syncUI(state, msg) { if (_syncHandler) _syncHandler(state, msg); }
+
+function metaValueString(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
+async function sbLoadSafe(label, loader, fallback) {
+  try { return await loader(); }
+  catch (e) {
+    console.warn(`[Supabase] ${label} 로드 실패:`, e);
+    return fallback;
+  }
+}
 
 // ── 단일 테이블 읽기 ──
 async function sbSelect(table) {
@@ -23,67 +39,63 @@ async function sbSelect(table) {
   return res.json();
 }
 
-// ── 테이블 전체 교체 (upsert) ──
+// ── 테이블 전체 교체 ──
 async function sbUpsert(table, rows) {
   if (!rows || !rows.length) {
-    // 데이터 없으면 전체 삭제
-    await fetch(SB.url(table, '?id=gte.0'), {
-      method: 'DELETE',
-      headers: SB.headers,
-    });
+    await fetch(SB.url(table, '?id=gte.0'), { method: 'DELETE', headers: SB.headers });
     return;
   }
-  // 기존 삭제 후 삽입
-  await fetch(SB.url(table, '?id=gte.0'), {
-    method: 'DELETE',
-    headers: SB.headers,
-  });
+  await fetch(SB.url(table, '?id=gte.0'), { method: 'DELETE', headers: SB.headers });
   const res = await fetch(SB.url(table), {
     method: 'POST',
     headers: SB.headers,
     body: JSON.stringify(rows),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`${table} 저장 실패: ${err}`);
-  }
+  if (!res.ok) throw new Error(`${table} 저장 실패: ${await res.text()}`);
 }
 
-// ── meta 테이블 (key/value 구조) ──
+// ── meta (key/value) ──
 async function sbSelectMeta() {
   const rows = await sbSelect('meta');
   const meta = {};
   rows.forEach(r => { if (r.key) meta[r.key] = r.value; });
   return meta;
 }
+
 async function sbUpsertMeta(meta) {
   if (!meta) return;
-  const rows = Object.keys(meta).map(k => ({ key: k, value: String(meta[k] ?? '') }));
-  // meta는 key가 PK라서 upsert 방식
-  await fetch(SB.url('meta'), {
-    method: 'DELETE',
-    headers: { ...SB.headers, 'Prefer': '' },
-  });
+  const existing = await sbSelectMeta();
+  const merged = { ...existing };
+  for (const [k, v] of Object.entries(meta)) {
+    const s = metaValueString(v);
+    // 발표 스케일 등 부분 저장 시 빈 팀명·사진으로 덮어쓰기 방지
+    if (META_PRESERVE_IF_EMPTY.has(k) && !s && existing[k]) continue;
+    merged[k] = s;
+  }
+  const rows = Object.keys(merged).map(k => ({ key: k, value: merged[k] }));
   if (!rows.length) return;
-  await fetch(SB.url('meta'), {
+  const res = await fetch(SB.url('meta'), {
     method: 'POST',
-    headers: SB.headers,
+    headers: { ...SB.headers, 'Prefer': 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify(rows),
   });
+  if (!res.ok) throw new Error('meta 저장 실패: ' + await res.text());
 }
 
-// ── field 테이블 (항상 id=1 단일 행) ──
+// ── field (id=1 단일 행) ──
+const FIELD_DEFAULT = {
+  q1formation:'4-3-3', q1tokens:[],
+  q2formation:'', q2tokens:[],
+  q3formation:'', q3tokens:[],
+  q4formation:'', q4tokens:[],
+  activeQuarter: 1,
+};
+
 async function sbSelectField() {
   const res = await fetch(SB.url('field', '?id=eq.1'), { headers: SB.headers });
   if (!res.ok) throw new Error('field 읽기 실패');
   const rows = await res.json();
-  if (!rows.length) return {
-    q1formation:'4-3-3', q1tokens:[],
-    q2formation:'', q2tokens:[],
-    q3formation:'', q3tokens:[],
-    q4formation:'', q4tokens:[],
-    activeQuarter: 1,
-  };
+  if (!rows.length) return { ...FIELD_DEFAULT };
   const r = rows[0];
   return {
     q1formation: r.q1formation || '4-3-3',
@@ -97,6 +109,7 @@ async function sbSelectField() {
     activeQuarter: r.activeQuarter || 1,
   };
 }
+
 async function sbUpsertField(field) {
   if (!field) return;
   const row = {
@@ -116,45 +129,58 @@ async function sbUpsertField(field) {
     headers: { ...SB.headers, 'Prefer': 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify(row),
   });
-  if (!res.ok) throw new Error('field 저장 실패');
+  if (!res.ok) throw new Error('field 저장 실패: ' + await res.text());
 }
 
-// ── dueExemptions / dueMemos (따옴표 필요한 테이블명) ──
 async function sbSelectQuoted(table) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, { headers: SB.headers });
   if (!res.ok) throw new Error(`${table} 읽기 실패`);
   return res.json();
 }
 
-// ── 전체 로드 ──
-async function apiLoadAll() {
-  syncUI('loading', '데이터 불러오는 중…');
-  try {
-    const [players, matches, field, saves, meta,
-           dues, expenses, settlements, schedules, notices,
-           dueExemptions, dueMemos, disciplines] = await Promise.all([
-      sbSelect('players'),
-      sbSelect('matches'),
-      sbSelectField(),
-      sbSelect('saves'),
-      sbSelectMeta(),
-      sbSelect('dues'),
-      sbSelect('expenses'),
-      sbSelect('settlements'),
-      sbSelect('schedules'),
-      sbSelect('notices'),
-      sbSelectQuoted('dueExemptions'),
-      sbSelectQuoted('dueMemos'),
-      sbSelect('disciplines'),
-    ]);
-    syncUI('ok', '동기화됨');
-    return { players, matches, field, saves, meta,
-             dues, expenses, settlements, schedules, notices,
-             dueExemptions, dueMemos, disciplines };
-  } catch (e) {
+// ── 전체 로드 (일부 테이블 실패해도 나머지는 로드) ──
+async function apiLoadAll(silent = false) {
+  if (!silent) syncUI('loading', '데이터 불러오는 중…');
+  const jobs = [
+    ['players',       () => sbSelect('players'),           []],
+    ['matches',       () => sbSelect('matches'),           []],
+    ['field',         () => sbSelectField(),               { ...FIELD_DEFAULT }],
+    ['saves',         () => sbSelect('saves'),             []],
+    ['meta',          () => sbSelectMeta(),                {}],
+    ['dues',          () => sbSelect('dues'),              []],
+    ['expenses',      () => sbSelect('expenses'),          []],
+    ['settlements',   () => sbSelect('settlements'),       []],
+    ['schedules',     () => sbSelect('schedules'),         []],
+    ['notices',       () => sbSelect('notices'),           []],
+    ['dueExemptions', () => sbSelectQuoted('dueExemptions'), []],
+    ['dueMemos',      () => sbSelectQuoted('dueMemos'),    []],
+    ['disciplines',   () => sbSelect('disciplines'),       []],
+  ];
+  const settled = await Promise.allSettled(jobs.map(([, fn]) => fn()));
+  const failures = [];
+  const out = {};
+  jobs.forEach(([name], i) => {
+    const r = settled[i];
+    if (r.status === 'fulfilled') out[name] = r.value;
+    else {
+      failures.push(name);
+      out[name] = jobs[i][2];
+      console.warn(`[Supabase] ${name}:`, r.reason);
+    }
+  });
+  if (failures.length === jobs.length) {
     syncUI('error', '불러오기 실패');
-    throw e;
+    throw new Error('Supabase 전체 로드 실패');
   }
+  if (!silent) {
+    syncUI('ok', failures.length ? `동기화됨 (${failures.length}개 테이블 제외)` : '동기화됨');
+  }
+  return {
+    players: out.players, matches: out.matches, field: out.field, saves: out.saves, meta: out.meta,
+    dues: out.dues, expenses: out.expenses, settlements: out.settlements,
+    schedules: out.schedules, notices: out.notices,
+    dueExemptions: out.dueExemptions, dueMemos: out.dueMemos, disciplines: out.disciplines,
+  };
 }
 
 // ── 부분 저장 ──
@@ -162,19 +188,19 @@ async function apiSavePartial(data) {
   syncUI('saving', '저장 중…');
   try {
     const tasks = [];
-    if (data.players     !== undefined) tasks.push(sbUpsert('players',     data.players));
-    if (data.matches     !== undefined) tasks.push(sbUpsert('matches',     data.matches));
-    if (data.field       !== undefined) tasks.push(sbUpsertField(data.field));
-    if (data.saves       !== undefined) tasks.push(sbUpsert('saves',       data.saves));
-    if (data.meta        !== undefined) tasks.push(sbUpsertMeta(data.meta));
-    if (data.dues        !== undefined) tasks.push(sbUpsert('dues',        data.dues));
-    if (data.expenses    !== undefined) tasks.push(sbUpsert('expenses',    data.expenses));
-    if (data.settlements !== undefined) tasks.push(sbUpsert('settlements', data.settlements));
-    if (data.schedules   !== undefined) tasks.push(sbUpsert('schedules',   data.schedules));
-    if (data.notices     !== undefined) tasks.push(sbUpsert('notices',     data.notices));
+    if (data.players       !== undefined) tasks.push(sbUpsert('players',       data.players));
+    if (data.matches       !== undefined) tasks.push(sbUpsert('matches',       data.matches));
+    if (data.field         !== undefined) tasks.push(sbUpsertField(data.field));
+    if (data.saves         !== undefined) tasks.push(sbUpsert('saves',         data.saves));
+    if (data.meta          !== undefined) tasks.push(sbUpsertMeta(data.meta));
+    if (data.dues          !== undefined) tasks.push(sbUpsert('dues',          data.dues));
+    if (data.expenses      !== undefined) tasks.push(sbUpsert('expenses',      data.expenses));
+    if (data.settlements   !== undefined) tasks.push(sbUpsert('settlements',   data.settlements));
+    if (data.schedules     !== undefined) tasks.push(sbUpsert('schedules',     data.schedules));
+    if (data.notices       !== undefined) tasks.push(sbUpsert('notices',       data.notices));
     if (data.dueExemptions !== undefined) tasks.push(sbUpsert('dueExemptions', data.dueExemptions));
-    if (data.dueMemos    !== undefined) tasks.push(sbUpsert('dueMemos',    data.dueMemos));
-    if (data.disciplines !== undefined) tasks.push(sbUpsert('disciplines', data.disciplines));
+    if (data.dueMemos      !== undefined) tasks.push(sbUpsert('dueMemos',      data.dueMemos));
+    if (data.disciplines   !== undefined) tasks.push(sbUpsert('disciplines',   data.disciplines));
     await Promise.all(tasks);
     syncUI('ok', '동기화됨');
   } catch (e) {

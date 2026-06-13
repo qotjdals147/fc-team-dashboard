@@ -105,7 +105,7 @@ const TREASURER_PW_DEFAULT = '1234';
 let isTreasurer = false;
 
 function getTreasurerPw() {
-  return localStorage.getItem('fc_treasurer_pw') || TREASURER_PW_DEFAULT;
+  return String(localStorage.getItem('fc_treasurer_pw') || TREASURER_PW_DEFAULT);
 }
 
 function applyTreasurerMode() {
@@ -204,7 +204,17 @@ function submitTreasurerPwChange() {
 
 // localStorage 또는 기본값에서 현재 비밀번호 반환
 function getAdminPw() {
-  return localStorage.getItem('fc_admin_pw') || ADMIN_PW_DEFAULT;
+  return String(localStorage.getItem('fc_admin_pw') || ADMIN_PW_DEFAULT);
+}
+
+function syncMetaPasswords(meta) {
+  if (!meta) return;
+  if (meta.adminPw != null && String(meta.adminPw) !== '') {
+    localStorage.setItem('fc_admin_pw', String(meta.adminPw));
+  }
+  if (meta.treasurerPw != null && String(meta.treasurerPw) !== '') {
+    localStorage.setItem('fc_treasurer_pw', String(meta.treasurerPw));
+  }
 }
 
 function applyAdminMode() {
@@ -885,8 +895,7 @@ function applyRemoteData(data) {
   matches = normalizeMatchDates(data.matches || []);
   myTeamName = data.meta?.myTeam || '';
   // 시트에 저장된 비밀번호로 로컬 동기화 (기기 간 비밀번호 통일)
-  if (data.meta?.adminPw)     localStorage.setItem('fc_admin_pw',     data.meta.adminPw);
-  if (data.meta?.treasurerPw) localStorage.setItem('fc_treasurer_pw', data.meta.treasurerPw);
+  syncMetaPasswords(data.meta);
   // 총무 데이터 (시트 Date/ISO → YYYY-MM-DD)
   dues        = normalizeDuesDates(data.dues || []);
   expenses    = normalizeExpenseDates(data.expenses || []);

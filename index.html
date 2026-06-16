@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=100">
+<link rel="stylesheet" href="style.css?v=103">
 
 
 
@@ -3211,140 +3211,19 @@
 
 
 <div class="modal-bg" id="photoUrlModal">
-
-
-
-
-
-
-
-  <div class="modal modal-sm">
-
-
-
-
-
-
-
-    <h3>&#xD300; &#xC0AC;&#xC9C4; &#xAD00;&#xB9AC; (&#xCD5C;&#xB300; 5&#xC7A5;)</h3>
-
-
-
-
-
-
-
-    <p class="photo-url-hint">&#xAD6C;&#xAE00; &#xB4DC;&#xB77C;&#xC774;&#xBE0C; &#xACF5;&#xC720; &#xB9C1;&#xD06C;&#xB97C; &#xBD99;&#xC5EC;&#xB123;&#xC73C;&#xBA74; &#xC790;&#xB3D9; &#xBCC0;&#xD658;&#xB429;&#xB2C8;&#xB2E4;. Imgur&#xB3C4; &#xAC00;&#xB2A5;.</p>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC0AC;&#xC9C4; 1</label><input type="url" id="photoUrl0" placeholder="https://..." autocomplete="off"></div>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC0AC;&#xC9C4; 2</label><input type="url" id="photoUrl1" placeholder="https://..." autocomplete="off"></div>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC0AC;&#xC9C4; 3</label><input type="url" id="photoUrl2" placeholder="https://..." autocomplete="off"></div>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC0AC;&#xC9C4; 4</label><input type="url" id="photoUrl3" placeholder="https://..." autocomplete="off"></div>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC0AC;&#xC9C4; 5</label><input type="url" id="photoUrl4" placeholder="https://..." autocomplete="off"></div>
-
-
-
-
-
-
-
-    <div class="form-field"><label>&#xC790;&#xB3D9; &#xC804;&#xD658; &#xAC04;&#xACA9; (&#xCD08;, &#xCD5C;&#xC18C; 3)</label><input type="number" id="photoIntervalInput" min="3" max="60" value="10" style="width:80px"></div>
-
-
-
-
-
-
-
+  <div class="modal modal-sm modal-photo">
+    <h3>팀 사진 관리</h3>
+    <p class="photo-url-hint">이미지 파일을 첨부하세요 (JPG·PNG·GIF·WEBP, 장당 5MB). 저장 시 Supabase에 업로드됩니다.</p>
+    <div id="photoSlotsList" class="photo-slots-list"></div>
+    <button type="button" class="tr-btn-sm photo-add-slot-btn" onclick="addPhotoSlot()">＋ 사진 페이지 추가</button>
+    <div class="form-field photo-interval-field"><label>자동 전환 간격 (초, 최소 3)</label><input type="number" id="photoIntervalInput" min="3" max="60" value="10" style="width:80px"></div>
     <div class="modal-actions">
-
-
-
-
-
-
-
-      <button type="button" class="btn-cancel" onclick="clearTeamPhoto()">&#xC804;&#xCCB4; &#xC0AD;&#xC81C;</button>
-
-
-
-
-
-
-
-      <button class="btn-cancel" onclick="closePhotoUrlModal()">&#xCDE8;&#xC18C;</button>
-
-
-
-
-
-
-
-      <button class="btn-save-modal" onclick="saveTeamPhotos()">&#xC800;&#xC7A5;</button>
-
-
-
-
-
-
-
+      <button type="button" class="btn-cancel" onclick="clearTeamPhoto()">전체 삭제</button>
+      <button class="btn-cancel" onclick="closePhotoUrlModal()">취소</button>
+      <button class="btn-save-modal" id="photoSaveBtn" onclick="saveTeamPhotos()">저장</button>
     </div>
-
-
-
-
-
-
-
   </div>
-
-
-
-
-
-
-
 </div>
-
-
-
-
-
-
 
 <div class="modal-bg" id="fsaveModal">
 
@@ -3458,7 +3337,7 @@
 
 
 
-<script src="api.js?v=100"></script>
+<script src="api.js?v=102"></script>
 
 
 
@@ -3466,7 +3345,7 @@
 
 
 
-<script src="app.js?v=101"></script>
+<script src="app.js?v=103"></script>
 
 
 

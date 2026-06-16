@@ -505,6 +505,9 @@ let quarterData = {1:null,2:null,3:null,4:null};
 let activeQuarter = 1;
 // 슬라이드쇼
 let photoUrls = [], photoInterval = 10, currentPhotoIdx = 0, photoTransforms = [];
+let photoEditSlots = [];
+const PHOTO_MAX_SLOTS = 15;
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 let _slideTimer = null;
 // 오늘 멤버 필터 (세션 전용, 저장 안 함)
 let sessionAvailablePids = null; // null=필터 없음, Set=필터 적용 중
@@ -1577,43 +1580,145 @@ function checkNewNoticeAlert() {
   }
 }
 function openPhotoUrlModal() {
-  for (let i = 0; i < 5; i++) {
-    const el = document.getElementById('photoUrl' + i);
-    if (el) el.value = photoUrls[i] || '';
+  photoEditSlots = photoUrls.map((url, i) => ({
+    url,
+    storagePath: typeof apiStoragePathFromPublicUrl === 'function' ? apiStoragePathFromPublicUrl(url) : null,
+    pendingFile: null,
+    previewUrl: null,
+    transform: { ...(photoTransforms[i] || { x: 0, y: 0, scale: 1 }) },
+  }));
+  if (!photoEditSlots.length) {
+    photoEditSlots.push({ url: '', storagePath: null, pendingFile: null, previewUrl: null, transform: { x: 0, y: 0, scale: 1 } });
   }
   const intEl = document.getElementById('photoIntervalInput');
   if (intEl) intEl.value = photoInterval;
+  renderPhotoModalSlots();
   document.getElementById('photoUrlModal').classList.add('open');
-  setTimeout(() => document.getElementById('photoUrl0')?.focus(), 100);
 }
 function closePhotoUrlModal() {
-  document.getElementById('photoUrlModal').classList.remove('open');
+  photoEditSlots.forEach(s => { if (s.previewUrl) URL.revokeObjectURL(s.previewUrl); });
+  photoEditSlots = [];
+  document.getElementById('photoUrlModal')?.classList.remove('open');
 }
-function saveTeamPhotos() {
-  const urls = [];
-  for (let i = 0; i < 5; i++) {
-    const raw = (document.getElementById('photoUrl' + i)?.value || '').trim();
-    if (!raw) continue;
-    if (!/^https?:\/\//i.test(raw)) { alert((i+1) + '번 URL: http:// 또는 https:// 로 시작해야 합니다'); return; }
-    const n = normalizePhotoUrl(raw);
-    if (n === '__onedrive__') { alert('OneDrive 링크는 사용할 수 없습니다. Google Drive 또는 Imgur를 이용해주세요.'); return; }
-    urls.push(n);
+function renderPhotoModalSlots() {
+  const el = document.getElementById('photoSlotsList');
+  if (!el) return;
+  el.innerHTML = photoEditSlots.map((slot, i) => {
+    const preview = slot.previewUrl || slot.url;
+    const previewHtml = preview
+      ? `<div class="photo-slot-preview"><img src="${preview.replace(/"/g, '&quot;')}" alt=""></div>`
+      : '';
+    const nameHint = slot.pendingFile ? slot.pendingFile.name : (slot.url ? '\uD30C\uC77C \uC800\uC7A5\uB428' : '');
+    return `<div class="photo-slot">
+      <div class="photo-slot-head">
+        <span class="photo-slot-label">\uC0AC\uC9C4 ${i + 1}</span>
+        <button type="button" class="tr-btn-sm danger" onclick="removePhotoSlot(${i})" ${photoEditSlots.length <= 1 ? 'disabled' : ''}>\uD398\uC774\uC9C0 \uC0AD\uC81C</button>
+      </div>
+      ${previewHtml}
+      <div class="photo-slot-file">
+        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" id="photoFile${i}" onchange="onPhotoFileSelected(${i}, this)">
+        ${nameHint ? `<span class="photo-slot-fname">${nameHint.replace(/</g, '&lt;')}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function addPhotoSlot() {
+  if (photoEditSlots.length >= PHOTO_MAX_SLOTS) {
+    alert(`\uCD5C\uB300 ${PHOTO_MAX_SLOTS}\uC7A5\uAE4C\uC9C0 \uCD94\uAC00\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
+    return;
   }
-  const intVal = Math.max(3, parseInt(document.getElementById('photoIntervalInput')?.value) || 10);
-  photoUrls = urls;
-  photoInterval = intVal;
-  photoTransforms = photoUrls.map((_, i) => photoTransforms[i] || { x:0, y:0, scale:1 });
-  currentPhotoIdx = 0;
-  photoTransform = photoTransforms[0] || { x:0, y:0, scale:1 };
-  persistMeta().then(() => { closePhotoUrlModal(); renderHome(); }).catch(handleSaveError);
+  photoEditSlots.push({ url: '', storagePath: null, pendingFile: null, previewUrl: null, transform: { x: 0, y: 0, scale: 1 } });
+  renderPhotoModalSlots();
 }
-function saveTeamPhotoUrl() { saveTeamPhotos(); } // 구버전 호환
-function clearTeamPhoto() {
-  const anyFilled = Array.from({length:5}, (_, i) => document.getElementById('photoUrl' + i)?.value.trim()).some(Boolean);
-  if (!photoUrls.length && !anyFilled) { closePhotoUrlModal(); return; }
-  if (!confirm('사진을 모두 제거할까요?')) return;
-  photoUrls = []; photoTransforms = []; currentPhotoIdx = 0; photoTransform = {x:0,y:0,scale:1};
-  persistMeta().then(() => { closePhotoUrlModal(); renderHome(); }).catch(handleSaveError);
+function removePhotoSlot(idx) {
+  if (photoEditSlots.length <= 1) return;
+  const slot = photoEditSlots[idx];
+  if (slot.previewUrl) URL.revokeObjectURL(slot.previewUrl);
+  photoEditSlots.splice(idx, 1);
+  renderPhotoModalSlots();
+}
+function onPhotoFileSelected(idx, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('\uC774\uBBF8\uC9C0 \uD30C\uC77C\uB9CC \uC120\uD0DD\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.');
+    input.value = '';
+    return;
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    alert('\uD30C\uC77C \uD06C\uAE30\uB294 5MB \uC774\uD558\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.');
+    input.value = '';
+    return;
+  }
+  const slot = photoEditSlots[idx];
+  if (slot.previewUrl) URL.revokeObjectURL(slot.previewUrl);
+  slot.pendingFile = file;
+  slot.previewUrl = URL.createObjectURL(file);
+  renderPhotoModalSlots();
+}
+async function saveTeamPhotos() {
+  const btn = document.getElementById('photoSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '\uC800\uC7A5 \uC911\u2026'; }
+  try {
+    const intVal = Math.max(3, parseInt(document.getElementById('photoIntervalInput')?.value, 10) || 10);
+    const pathsToDelete = new Set();
+    const oldPaths = photoUrls.map(u => apiStoragePathFromPublicUrl(u)).filter(Boolean);
+
+    for (let i = 0; i < photoEditSlots.length; i++) {
+      const slot = photoEditSlots[i];
+      if (slot.pendingFile) {
+        const prevPath = slot.storagePath;
+        const { url, storagePath } = await apiUploadTeamPhoto(slot.pendingFile);
+        if (prevPath && prevPath !== storagePath) pathsToDelete.add(prevPath);
+        slot.url = url;
+        slot.storagePath = storagePath;
+        slot.pendingFile = null;
+        if (slot.previewUrl) { URL.revokeObjectURL(slot.previewUrl); slot.previewUrl = null; }
+      }
+    }
+
+    const kept = photoEditSlots.filter(s => s.url || s.pendingFile);
+    const newUrls = kept.map(s => s.url).filter(Boolean);
+    const newPaths = new Set(newUrls.map(u => apiStoragePathFromPublicUrl(u)).filter(Boolean));
+    oldPaths.forEach(p => { if (!newPaths.has(p)) pathsToDelete.add(p); });
+
+    for (const p of pathsToDelete) {
+      await apiDeleteTeamPhoto(p).catch(err => console.warn('[photo delete]', err));
+    }
+
+    photoUrls = newUrls;
+    photoInterval = intVal;
+    photoTransforms = kept.filter(s => s.url).map(s => s.transform || { x: 0, y: 0, scale: 1 });
+    currentPhotoIdx = 0;
+    photoTransform = photoTransforms[0] || { x: 0, y: 0, scale: 1 };
+
+    await persistMeta();
+    closePhotoUrlModal();
+    renderHome();
+  } catch (e) {
+    handleSaveError(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\uC800\uC7A5'; }
+  }
+}
+function saveTeamPhotoUrl() { saveTeamPhotos(); }
+async function clearTeamPhoto() {
+  const hasAny = photoEditSlots.some(s => s.url || s.pendingFile) || photoUrls.length;
+  if (!hasAny) { closePhotoUrlModal(); return; }
+  if (!confirm('\uBAA8\uB4E0 \uD300 \uC0AC\uC9C4\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?')) return;
+  const paths = photoUrls.map(u => apiStoragePathFromPublicUrl(u)).filter(Boolean);
+  photoUrls = [];
+  photoTransforms = [];
+  currentPhotoIdx = 0;
+  photoTransform = { x: 0, y: 0, scale: 1 };
+  try {
+    for (const p of paths) await apiDeleteTeamPhoto(p).catch(err => console.warn('[photo delete]', err));
+    await persistMeta();
+    closePhotoUrlModal();
+    renderHome();
+  } catch (e) {
+    handleSaveError(e);
+  }
 }
 function editTeamName() {
   const name = prompt('팀 이름', myTeamName || '우리 FC');
@@ -4070,7 +4175,10 @@ function renderTreasurer() {
         </tbody>
       </table>
     </div>
-    <div class="tr-subsection-title">\uC804\uCCB4 \uC785\uAE08 \uAE30\uB85D</div>
+    <div class="tr-subsection-header">
+      <div class="tr-subsection-title">\uC804\uCCB4 \uC785\uAE08 \uAE30\uB85D</div>
+      <button class="tr-btn-sm danger" onclick="deleteSelectedDues()">\uC120\uD0DD \uC0AD\uC81C</button>
+    </div>
     <div class="tr-scroll-box" id="trDuesList">
       ${renderDuesList(ym)}
     </div>
@@ -4146,9 +4254,13 @@ function renderDuesList(ym) {
   if (!rows.length) return '<div class="tr-empty">\uC785\uAE08 \uAE30\uB85D \uC5C6\uC74C</div>';
   return `<div class="tr-table-wrap">
     <table class="tr-table">
-      <thead><tr><th>\uB0A0\uC9DC</th><th>\uB300\uC0C1</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th></th></tr></thead>
+      <thead><tr>
+        <th class="tr-check-col"><input type="checkbox" title="\uC804\uCCB4 \uC120\uD0DD" onchange="toggleDuesSelectAll(this.checked)"></th>
+        <th>\uB0A0\uC9DC</th><th>\uB300\uC0C1</th><th>\uAE08\uC561</th><th>\uBA54\uBAA8</th><th></th>
+      </tr></thead>
       <tbody>
         ${rows.map(d => `<tr>
+          <td class="tr-check-col"><input type="checkbox" class="dues-row-cb" value="${d.id}"></td>
           <td>${formatDateDisplay(d.date)}</td>
           <td>${dueRecordLabel(d)}</td>
           <td>${fmtMoney(d.amount)}</td>
@@ -4158,6 +4270,20 @@ function renderDuesList(ym) {
       </tbody>
     </table>
   </div>`;
+}
+
+function toggleDuesSelectAll(checked) {
+  document.querySelectorAll('.dues-row-cb').forEach(cb => { cb.checked = checked; });
+}
+
+function deleteSelectedDues() {
+  const ids = [...document.querySelectorAll('.dues-row-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { alert('\uC0AD\uC81C\uD560 \uC785\uAE08 \uAE30\uB85D\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694'); return; }
+  if (!confirm(`\uC120\uD0DD\uD55C ${ids.length}\uAC74\uC758 \uC785\uAE08 \uAE30\uB85D\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`)) return;
+  const idSet = new Set(ids.map(String));
+  dues = dues.filter(d => !idSet.has(String(d.id)));
+  persistDues().catch(handleSaveError);
+  renderTreasurer();
 }
 
 function renderSettlementRows() {

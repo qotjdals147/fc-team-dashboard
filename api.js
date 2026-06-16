@@ -208,3 +208,48 @@ async function apiSavePartial(data) {
     throw e;
   }
 }
+
+// ── Storage: 팀 사진 (FC 제로 A안 — bucket team-photos) ──
+const STORAGE_BUCKET_TEAM_PHOTOS = 'team-photos';
+const STORAGE_PREFIX_FC_ZERO = 'fc-zero/';
+
+function apiTeamPhotoPublicUrl(storagePath) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET_TEAM_PHOTOS}/${storagePath}`;
+}
+
+function apiStoragePathFromPublicUrl(url) {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET_TEAM_PHOTOS}/`;
+  const i = url.indexOf(marker);
+  if (i < 0) return null;
+  return decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
+}
+
+async function apiUploadTeamPhoto(file) {
+  const extMatch = (file.name || '').match(/\.(jpe?g|png|gif|webp)$/i);
+  const ext = extMatch ? extMatch[1].toLowerCase().replace('jpeg', 'jpg') : 'jpg';
+  const path = `${STORAGE_PREFIX_FC_ZERO}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET_TEAM_PHOTOS}/${path}`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': file.type || 'image/jpeg',
+    },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`사진 업로드 실패: ${await res.text()}`);
+  return { url: apiTeamPhotoPublicUrl(path), storagePath: path };
+}
+
+async function apiDeleteTeamPhoto(storagePath) {
+  if (!storagePath) return;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET_TEAM_PHOTOS}/${storagePath}`, {
+    method: 'DELETE',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`사진 삭제 실패: ${await res.text()}`);
+}

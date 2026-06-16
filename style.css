@@ -158,6 +158,17 @@ body:not(.is-admin) .admin-only { display:none !important; }
 }
 .home-section-divider::before { max-width:16px; }
 .photo-url-hint { font-size:11px; color:var(--text3); line-height:1.5; margin-bottom:12px; }
+.modal-photo { max-width:420px; }
+.photo-slots-list { display:flex; flex-direction:column; gap:12px; max-height:50vh; overflow-y:auto; margin-bottom:10px; }
+.photo-slot { border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--surface); }
+.photo-slot-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.photo-slot-label { font-size:13px; font-weight:600; }
+.photo-slot-preview { margin-bottom:8px; border-radius:8px; overflow:hidden; background:#111; max-height:120px; }
+.photo-slot-preview img { width:100%; max-height:120px; object-fit:contain; display:block; }
+.photo-slot-file input[type="file"] { font-size:12px; max-width:100%; }
+.photo-slot-fname { display:block; font-size:11px; color:var(--text3); margin-top:4px; word-break:break-all; }
+.photo-add-slot-btn { width:100%; margin-bottom:12px; }
+.photo-interval-field { margin-top:4px; }
 .tab-panel { display:none; flex:1; overflow:hidden; flex-direction:column; min-height:0; }
 .tab-panel.active { display:flex; }
 
@@ -903,6 +914,31 @@ body.presentation-mode #presentQuarterBtns .quarter-copy-arrow {
   font-weight: 600;
   color: var(--text2);
   margin-top: 4px;
+}
+
+.tr-subsection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.tr-subsection-header .tr-subsection-title {
+  margin: 0;
+}
+
+.tr-check-col {
+  width: 36px;
+  text-align: center;
+}
+
+.tr-check-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
 /* 요약 대시보드 — 세로 1항목 1행 */

@@ -3912,6 +3912,11 @@ function cleanupTreasurerData() {
 
 // persist 함수
 async function persistDues()        { await apiSavePartial({ dues });        localStorage.setItem('fc_dues',        JSON.stringify(dues));        }
+
+function nextDueId() {
+  const max = dues.reduce((m, d) => Math.max(m, Math.floor(Number(d.id)) || 0), 0);
+  return max + 1;
+}
 async function persistExpenses()    { await apiSavePartial({ expenses });    localStorage.setItem('fc_expenses',    JSON.stringify(expenses));    }
 async function persistSettlements() { await apiSavePartial({ settlements }); localStorage.setItem('fc_settlements', JSON.stringify(settlements)); }
 async function persistDisciplines() { await apiSavePartial({ disciplines }); localStorage.setItem('fc_disciplines', JSON.stringify(disciplines)); }
@@ -4452,7 +4457,7 @@ function saveBulkDues() {
   const ym = getTrYearMonth();
   const note = `${formatYearMonthDisplay(ym)} \uD68C\uBE44`;
   pids.forEach(pid => {
-    dues.push({ id: Date.now() + Math.random(), pid, amount, date, note, type: DUE_TYPE_PAYMENT });
+    dues.push({ id: nextDueId(), pid, amount, date, note, type: DUE_TYPE_PAYMENT });
   });
   closeBulkDuesModal();
   persistDues().catch(handleSaveError);

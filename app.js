@@ -4149,6 +4149,8 @@ function editDueMemo(pid) {
 function renderTreasurer() {
   const wrap = document.getElementById('tab-treasurer');
   if (!wrap) return;
+  const prevPage = wrap.querySelector('.tr-page');
+  const savedScrollTop = prevPage ? prevPage.scrollTop : 0;
 
   const ym = getTrYearMonth();
   const monthDues = filterDuesByMonth(dues.filter(d => d.type !== 'refund'), ym);
@@ -4291,6 +4293,12 @@ function renderTreasurer() {
   const toEl   = document.getElementById('trSettleTo');
   if (fromEl && !fromEl.value) fromEl.value = jan1;
   if (toEl   && !toEl.value)   toEl.value   = today;
+
+  const page = wrap.querySelector('.tr-page');
+  if (page && savedScrollTop > 0) {
+    page.scrollTop = savedScrollTop;
+    requestAnimationFrame(() => { page.scrollTop = savedScrollTop; });
+  }
 }
 
 function renderDuesList(ym) {

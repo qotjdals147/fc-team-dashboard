@@ -497,6 +497,8 @@ let schedules = [], notices = [], dueExemptions = [], dueMemos = [];
 let trFilterYearMonth = null;
 let cachedFormation = '';
 let photoTransform = { x: 0, y: 0, scale: 1 };
+const PHOTO_SCALE_MIN = 1;
+const PHOTO_SCALE_MAX = 4;
 let matchParticipants = [];
 let statsSubTab = 'personal';
 let slotHighlight = -1; // 드래그 중 강조할 포메이션 슬롯 인덱스
@@ -1191,10 +1193,43 @@ function normalizePhotoUrl(url) {
 }
 
 // ── 홈 (단체 사진 · 클럽원) ──
+function getPhotoFrameMetrics() {
+  const wrap = document.getElementById('homePhotoWrap');
+  const img = document.getElementById('homePhoto');
+  if (!wrap || !img || !img.naturalWidth || !img.naturalHeight) return null;
+  const cw = wrap.clientWidth;
+  const ch = wrap.clientHeight;
+  if (!cw || !ch) return null;
+  const nw = img.naturalWidth;
+  const nh = img.naturalHeight;
+  const coverK = Math.max(cw / nw, ch / nh);
+  return { cw, ch, coverW: nw * coverK, coverH: nh * coverK };
+}
+function clampPhotoTransform() {
+  const m = getPhotoFrameMetrics();
+  if (!m) {
+    photoTransform.scale = Math.max(PHOTO_SCALE_MIN, Math.min(PHOTO_SCALE_MAX, photoTransform.scale || 1));
+    return;
+  }
+  photoTransform.scale = Math.max(PHOTO_SCALE_MIN, Math.min(PHOTO_SCALE_MAX, photoTransform.scale || 1));
+  const dispW = m.coverW * photoTransform.scale;
+  const dispH = m.coverH * photoTransform.scale;
+  const maxX = Math.max(0, (dispW - m.cw) / 2);
+  const maxY = Math.max(0, (dispH - m.ch) / 2);
+  photoTransform.x = Math.max(-maxX, Math.min(maxX, photoTransform.x || 0));
+  photoTransform.y = Math.max(-maxY, Math.min(maxY, photoTransform.y || 0));
+}
 function applyPhotoTransform() {
   const img = document.getElementById('homePhoto');
   if (!img) return;
-  img.style.transform = `translate(calc(-50% + ${photoTransform.x}px), calc(-50% + ${photoTransform.y}px)) scale(${photoTransform.scale})`;
+  clampPhotoTransform();
+  const m = getPhotoFrameMetrics();
+  if (m) {
+    img.style.width = (m.coverW * photoTransform.scale) + 'px';
+    img.style.height = (m.coverH * photoTransform.scale) + 'px';
+    img.style.objectFit = 'fill';
+  }
+  img.style.transform = `translate(calc(-50% + ${photoTransform.x}px), calc(-50% + ${photoTransform.y}px))`;
   img.style.transformOrigin = 'center center';
 }
 let _photoSaveTimer = null;
@@ -1290,23 +1325,32 @@ function initPhotoDrag() {
       e.preventDefault();
     } else if (e.touches.length === 2) {
       const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      photoTransform.scale = Math.max(0.3, Math.min(4, pinchScale0 * (dist / pinchDist0)));
+      photoTransform.scale = Math.max(PHOTO_SCALE_MIN, Math.min(PHOTO_SCALE_MAX, pinchScale0 * (dist / pinchDist0)));
       applyPhotoTransform();
       e.preventDefault();
     }
   }, { passive: false });
   wrap.addEventListener('touchend', () => {
     if (pd.active) { pd.active = false; savePhotoTransform(); }
+    else savePhotoTransform();
   });
   // 마우스 휠 줌
   wrap.addEventListener('wheel', e => {
     if (!isAdmin || !photoUrls.length) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    photoTransform.scale = Math.max(0.3, Math.min(4, photoTransform.scale + delta));
+    photoTransform.scale = Math.max(PHOTO_SCALE_MIN, Math.min(PHOTO_SCALE_MAX, photoTransform.scale + delta));
     applyPhotoTransform();
     savePhotoTransform();
   }, { passive: false });
+  let _photoResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_photoResizeTimer);
+    _photoResizeTimer = setTimeout(() => {
+      if (!photoUrls.length) return;
+      applyPhotoTransform();
+    }, 80);
+  });
 }
 function renderHome() {
   const nameEl = document.getElementById('homeTeamName');

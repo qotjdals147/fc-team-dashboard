@@ -3459,34 +3459,37 @@ function renderMatchModalEvents(em) {
     assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0,
     ownGoals:em?.scorers?.find(s=>s.pid===x.pid)?.ownGoals||0
   }]));
-  list.innerHTML=`<div class="player-event-row match-event-header">
-    <div class="player-event-head">선수</div>
-    <div class="event-stat-label">⚽ 골</div>
-    <div class="event-stat-label">🅰️ 어시</div>
-    <div class="event-stat-label">🥅 자책</div>
-  </div>`+matchParticipants.map(x=>{
-    const subTag=x.type==='sub'?'<span class="match-part-sub">🔄교체</span>':'';
-    const qTag=x.quarters?.length?`<span class="match-part-quarter">${quarterLabel(x.quarters)}</span>`:'';
-    return `<div class="player-event-row">
-      <div class="player-event-head">
-        <span class="player-event-name">${x.name}</span>${subTag}${qTag}
-        <span class="player-event-pos">${x.pos}</span>
+  list.innerHTML=`<div class="match-event-table">
+    <div class="match-event-row match-event-head-row">
+      <div class="match-event-namecol">선수</div>
+      <div class="match-event-stat match-event-stat-h" title="골">⚽</div>
+      <div class="match-event-stat match-event-stat-h" title="어시스트">🅰️</div>
+      <div class="match-event-stat match-event-stat-h" title="자책">🥅</div>
+    </div>
+    ${matchParticipants.map(x=>{
+    const subTag=x.type==='sub'?' · 🔄교체':'';
+    const qTag=x.quarters?.length?quarterLabel(x.quarters):'';
+    const meta=[qTag,x.pos].filter(Boolean).join(' · ')+subTag;
+    return `<div class="match-event-row">
+      <div class="match-event-namecol">
+        <span class="match-event-name">${x.name}</span>
+        <span class="match-event-meta">${meta||x.pos||''}</span>
       </div>
-      <div class="event-stat-cell">
+      <div class="match-event-stat">
         <div class="event-count">
           <button class="btn-event" onclick="changeEvent(${x.pid},'goals',-1)">−</button>
           <span class="event-num" id="g_${x.pid}">${matchEvents[x.pid].goals}</span>
           <button class="btn-event" onclick="changeEvent(${x.pid},'goals',1)">+</button>
         </div>
       </div>
-      <div class="event-stat-cell">
+      <div class="match-event-stat">
         <div class="event-count">
           <button class="btn-event" onclick="changeEvent(${x.pid},'assists',-1)">−</button>
           <span class="event-num" id="a_${x.pid}">${matchEvents[x.pid].assists}</span>
           <button class="btn-event" onclick="changeEvent(${x.pid},'assists',1)">+</button>
         </div>
       </div>
-      <div class="event-stat-cell">
+      <div class="match-event-stat">
         <div class="event-count">
           <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',-1)">−</button>
           <span class="event-num" id="o_${x.pid}">${matchEvents[x.pid].ownGoals}</span>
@@ -3494,7 +3497,8 @@ function renderMatchModalEvents(em) {
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('')}
+  </div>`;
   document.getElementById('momSelectWrap').innerHTML=`
   <div class="mom-select-label">&#x1F3C6; MOM (${wageRates.mom}&#xC6D0;)</div>
   <div class="mom-select" id="momBtns">

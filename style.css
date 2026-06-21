@@ -438,16 +438,16 @@ body.presentation-mode .field-export-btn {
 .score-row { display:flex; align-items:center; gap:8px; }
 .score-row input { flex:1; padding:9px; text-align:center; font-size:18px; font-weight:700; border:1px solid var(--border2); border-radius:var(--radius); background:var(--bg); color:var(--text); }
 .score-row span { font-size:18px; font-weight:700; color:var(--text2); flex-shrink:0; }
-.player-event-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px 8px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border); }
-.player-event-row:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
-.player-event-head { grid-column:1 / -1; display:flex; align-items:center; flex-wrap:wrap; gap:4px 6px; min-width:0; }
-.player-event-name { font-size:13px; font-weight:600; }
-.player-event-pos { font-size:10px; color:var(--text2); background:var(--bg2); padding:1px 6px; border-radius:8px; }
-.match-event-header { margin-bottom:4px; padding-bottom:6px; border-bottom:1px solid var(--border2); }
-.match-event-header .player-event-head { font-size:11px; font-weight:600; color:var(--text3); }
-.event-stat-cell { display:flex; justify-content:center; align-items:center; }
-.event-stat-label { font-size:11px; color:var(--text2); text-align:center; white-space:nowrap; }
-.event-count { display:flex; align-items:center; justify-content:center; gap:3px; }
+.match-event-table { width:100%; }
+.match-event-row { display:grid; grid-template-columns:minmax(0,1fr) 68px 68px 68px; align-items:center; column-gap:6px; padding:9px 0; border-bottom:1px solid var(--border); }
+.match-event-row:last-child { border-bottom:none; }
+.match-event-head-row { padding:4px 0 8px; border-bottom:1px solid var(--border2); font-size:11px; font-weight:600; color:var(--text3); }
+.match-event-namecol { min-width:0; line-height:1.35; }
+.match-event-name { font-size:13px; font-weight:600; display:block; }
+.match-event-meta { font-size:10px; color:var(--text2); display:block; margin-top:1px; }
+.match-event-stat { display:flex; justify-content:center; align-items:center; }
+.match-event-stat-h { text-align:center; font-size:14px; line-height:1; }
+.event-count { display:flex; align-items:center; justify-content:center; gap:2px; }
 .wage-rates-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; margin:12px 0 4px; }
 .wage-rate-field input { width:100%; }
 .wage-rates-note { font-size:12px; color:var(--text3); line-height:1.55; margin:0 0 8px; }

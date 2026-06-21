@@ -58,7 +58,7 @@
 
 
 
-<link rel="stylesheet" href="style.css?v=104">
+<link rel="stylesheet" href="style.css?v=105">
 
 
 
@@ -2603,6 +2603,10 @@
 
 
         </div>
+        <div class="form-field" style="margin-top:10px">
+          <label>상대 자책골 (우리 득점)</label>
+          <input type="number" id="matchOppOwnGoals" value="0" min="0" max="10" title="상대팀이 넣은 자책골 — 우리 스코어에 더해짐">
+        </div>
 
 
 
@@ -2682,7 +2686,7 @@
 
 
 
-      <div class="modal-section-title">골 &#xB7; 어시스트</div>
+      <div class="modal-section-title">골 &#xB7; 어시스트 &#xB7; 자책 (우리)</div>
 
 
 
@@ -2898,6 +2902,8 @@
 
 
 
+      <button class="btn-save-modal" onclick="openWageRatesModal()">수당 금액 수정</button>
+
       <button class="btn-save-modal" onclick="openPwChangeModal()">비밀번호 변경</button>
 
 
@@ -2937,6 +2943,19 @@
 
 
 
+
+
+<div class="modal-bg" id="wageRatesModal">
+  <div class="modal modal-sm">
+    <h3>수당 금액 수정</h3>
+    <p class="wage-rates-note">변경 후 <strong>미정산·선수 가치</strong>에 바로 반영됩니다. 이미 정산 완료된 금액은 바뀌지 않습니다.</p>
+    <div id="wageRatesGrid" class="wage-rates-grid"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeWageRatesModal()">취소</button>
+      <button class="btn-save-modal" onclick="saveWageRates()">저장</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="pwChangeModal">
 
@@ -3345,7 +3364,7 @@
 
 
 
-<script src="app.js?v=105"></script>
+<script src="app.js?v=106"></script>
 
 
 

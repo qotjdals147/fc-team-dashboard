@@ -300,6 +300,41 @@ function submitPwChange() {
   });
 }
 
+function openWageRatesModal() {
+  closeAdminOptionsModal();
+  const grid = document.getElementById('wageRatesGrid');
+  if (grid) {
+    grid.innerHTML = WAGE_FIELDS.map(f => `
+      <div class="form-field wage-rate-field">
+        <label>${f.label}</label>
+        <input type="number" id="wage_${f.key}" min="0" max="99999" step="1" value="${wageRates[f.key] ?? WAGE_DEFAULTS[f.key]}">
+      </div>`).join('');
+  }
+  document.getElementById('wageRatesModal')?.classList.add('open');
+}
+function closeWageRatesModal() {
+  document.getElementById('wageRatesModal')?.classList.remove('open');
+}
+function saveWageRates() {
+  const next = { ...WAGE_DEFAULTS, ...wageRates };
+  for (const f of WAGE_FIELDS) {
+    const v = parseInt(document.getElementById('wage_' + f.key)?.value, 10);
+    if (Number.isNaN(v) || v < 0) {
+      alert(f.label + ' 금액을 확인해주세요');
+      return;
+    }
+    next[f.key] = v;
+  }
+  wageRates = next;
+  persistMeta().then(() => {
+    closeWageRatesModal();
+    renderRecords();
+    renderRoster();
+    refreshStatsIfVisible();
+    alert('수당 기준이 저장되었습니다.\n미정산·선수 가치에 반영됩니다.\n(이미 정산 완료된 금액은 변경되지 않습니다)');
+  }).catch(handleSaveError);
+}
+
 function openAdminModal() {
   const inp = document.getElementById('adminPwInput');
   if (inp) inp.value = '';
@@ -339,8 +374,18 @@ function formatPlayerValue(wageWon) {
 }
 
 // ── 수당 기준 (meta.wageRates로 오버라이드 가능) ──
-const WAGE_DEFAULTS = { attendance:50, win:100, cleansheet:150, goal:300, assist:200, bestDef:500, bestDef2:300, mom:800 };
+const WAGE_DEFAULTS = { attendance:50, win:100, cleansheet:150, goal:300, assist:200, bestDef:500, bestDef2:300, mom:500 };
 let wageRates = { ...WAGE_DEFAULTS };
+const WAGE_FIELDS = [
+  { key: 'attendance', label: '출석' },
+  { key: 'win', label: '승리' },
+  { key: 'cleansheet', label: '클린시트 (수비)' },
+  { key: 'goal', label: '골' },
+  { key: 'assist', label: '어시스트' },
+  { key: 'bestDef', label: '베스트 수비' },
+  { key: 'bestDef2', label: '수비 공헌 수당' },
+  { key: 'mom', label: 'MOM' },
+];
 const DEF_POSITIONS = new Set(['CB','LB','RB','GK']);
 
 function loadWageRates(meta) {
@@ -1167,6 +1212,7 @@ async function persistMeta() {
     ...(adminPw     ? { adminPw }     : {}),
     ...(treasurerPw ? { treasurerPw } : {}),
     presentScales: JSON.stringify(presentScales),
+    wageRates: JSON.stringify(wageRates),
   };
   await apiSavePartial({ meta });
   localStorage.setItem('fc_myteam', myTeamName || '');
@@ -3410,7 +3456,8 @@ function renderMatchModalEvents(em) {
   }
   matchEvents=Object.fromEntries(matchParticipants.map(x=>[x.pid,{
     goals:em?.scorers?.find(s=>s.pid===x.pid)?.goals||0,
-    assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0
+    assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0,
+    ownGoals:em?.scorers?.find(s=>s.pid===x.pid)?.ownGoals||0
   }]));
   list.innerHTML=matchParticipants.map(x=>{
     const subTag=x.type==='sub'?'<span class="match-part-sub">🔄교체</span>':'';
@@ -3431,19 +3478,25 @@ function renderMatchModalEvents(em) {
         <span class="event-num" id="a_${x.pid}">${matchEvents[x.pid].assists}</span>
         <button class="btn-event" onclick="changeEvent(${x.pid},'assists',1)">+</button>
       </div>
+      <span style="font-size:11px;color:var(--text2);margin-left:4px">🥅</span>
+      <div class="event-count">
+        <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',-1)">−</button>
+        <span class="event-num" id="o_${x.pid}">${matchEvents[x.pid].ownGoals}</span>
+        <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',1)">+</button>
+      </div>
     </div>`;
   }).join('');
   document.getElementById('momSelectWrap').innerHTML=`
-  <div class="mom-select-label">&#x1F3C6; MOM</div>
+  <div class="mom-select-label">&#x1F3C6; MOM (${wageRates.mom}&#xC6D0;)</div>
   <div class="mom-select" id="momBtns">
     ${matchParticipants.map(x=>`<button class="mom-btn ${matchMom===x.pid?'active':''}" onclick="selectMom(${x.pid})" id="mom_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
   </div>
-  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xBCA0;&#xC2A4;&#xD2B8; &#xC218;&#xBE44; (500&#xC6D0;)</div>
+  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xBCA0;&#xC2A4;&#xD2B8; &#xC218;&#xBE44; (${wageRates.bestDef}&#xC6D0;)</div>
   <div class="mom-select" id="bestDefBtns">
     <button class="mom-btn ${matchBestDef===null?'active':''}" onclick="selectBestDef(null)" id="bd_none">&#xC5C6;&#xC74C;</button>
     ${matchParticipants.map(x=>`<button class="mom-btn ${matchBestDef===x.pid?'active':''}" onclick="selectBestDef(${x.pid})" id="bd_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
   </div>
-  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xC218;&#xBE44; &#xACF5;&#xD5CC; &#xC218;&#xB2F9; (300&#xC6D0;)</div>
+  <div class="mom-select-label" style="margin-top:8px">&#x1F6E1;&#xFE0F; &#xC218;&#xBE44; &#xACF5;&#xD5CC; &#xC218;&#xB2F9; (${wageRates.bestDef2}&#xC6D0;)</div>
   <div class="mom-select" id="bestDef2Btns">
     <button class="mom-btn ${matchBestDef2===null?'active':''}" onclick="selectBestDef2(null)" id="bd2_none">&#xC5C6;&#xC74C;</button>
     ${matchParticipants.map(x=>`<button class="mom-btn ${matchBestDef2===x.pid?'active':''}" onclick="selectBestDef2(${x.pid})" id="bd2_${x.pid}">${x.name}${x.type==='sub'?' 🔄':''}</button>`).join('')}
@@ -3463,6 +3516,8 @@ function openMatchModal(editId){
   document.getElementById('matchDate').value=normalizeDate(em?.date)||new Date().toISOString().slice(0,10);
   document.getElementById('matchScoreUs').value=em?.scoreUs??0;
   document.getElementById('matchScoreOpp').value=em?.scoreOpp??0;
+  const oppOgEl=document.getElementById('matchOppOwnGoals');
+  if(oppOgEl) oppOgEl.value=em?.oppOwnGoals??0;
   matchMom=em?.mom||null;
   matchBestDef=em?.bestDef||null;
   matchBestDef2=em?.bestDef2||null;
@@ -3491,9 +3546,11 @@ function selectBestDef2(pid){
   const b=document.getElementById(id);if(b)b.classList.add('active');
 }
 function changeEvent(pid,type,delta){
-  if(!matchEvents[pid])matchEvents[pid]={goals:0,assists:0};
+  if(!matchEvents[pid])matchEvents[pid]={goals:0,assists:0,ownGoals:0};
   matchEvents[pid][type]=Math.max(0,matchEvents[pid][type]+delta);
-  document.getElementById((type==='goals'?'g_':'a_')+pid).textContent=matchEvents[pid][type];
+  const idMap={goals:'g_',assists:'a_',ownGoals:'o_'};
+  const el=document.getElementById((idMap[type]||'g_')+pid);
+  if(el) el.textContent=matchEvents[pid][type];
 }
 function closeMatchModal(){document.getElementById('matchModal').classList.remove('open');}
 function saveMatch(){
@@ -3503,23 +3560,29 @@ function saveMatch(){
   const date=normalizeDate(document.getElementById('matchDate').value);
   const scoreUs=parseInt(document.getElementById('matchScoreUs').value)||0;
   const scoreOpp=parseInt(document.getElementById('matchScoreOpp').value)||0;
+  const oppOwnGoals=parseInt(document.getElementById('matchOppOwnGoals')?.value,10)||0;
   const homeAway=null; // 홈/어웨이 미사용 (하위호환용 null 유지)
   const totalGoals=matchParticipants.reduce((s,x)=>s+(matchEvents[x.pid]?.goals||0),0);
-  if(totalGoals!==scoreUs){
-    alert(`선수 골 합(${totalGoals})과 우리 팀 득점(${scoreUs})이 일치하지 않습니다.`);
+  const totalOurOwnGoals=matchParticipants.reduce((s,x)=>s+(matchEvents[x.pid]?.ownGoals||0),0);
+  if(totalGoals+oppOwnGoals!==scoreUs){
+    alert(`선수 골(${totalGoals}) + 상대 자책(${oppOwnGoals}) = ${totalGoals+oppOwnGoals}, 우리 팀 득점(${scoreUs})과 일치하지 않습니다.`);
     return;
+  }
+  if(totalOurOwnGoals>0&&scoreOpp<totalOurOwnGoals){
+    if(!confirm(`우리 자책골 ${totalOurOwnGoals}개 — 상대 득점(${scoreOpp})에 반영됐는지 확인해주세요.\n그래도 저장할까요?`)) return;
   }
   myTeamName=myTeam;
   const em=editingMatchId?matches.find(m=>m.id===editingMatchId):null;
   const scorers=matchParticipants.map(x=>{
-    const ev=matchEvents[x.pid]||{goals:0,assists:0};
-    return{pid:x.pid,name:x.name,pos:x.pos,ovr:x.ovr,goals:ev.goals,assists:ev.assists};
-  }).filter(x=>x.goals>0||x.assists>0);
+    const ev=matchEvents[x.pid]||{goals:0,assists:0,ownGoals:0};
+    return{pid:x.pid,name:x.name,pos:x.pos,ovr:x.ovr,goals:ev.goals,assists:ev.assists,ownGoals:ev.ownGoals||0};
+  }).filter(x=>x.goals>0||x.assists>0||(x.ownGoals||0)>0);
   const lineup=matchParticipants.filter(x=>x.type!=='sub').map(({pid,name,pos,ovr,quarters})=>({pid,name,pos,ovr,...(quarters?.length?{quarters}:{})}));
   const subs=matchParticipants.filter(x=>x.type==='sub').map(({pid,name,pos,ovr,pairedWith,quarters})=>({pid,name,pos,ovr,pairedWith,...(quarters?.length?{quarters}:{})}));
   const momPlayer=matchMom?players.find(p=>p.id===matchMom):null;
   const matchData={
     id:editingMatchId||Date.now(),myTeam,oppTeam,date,homeAway,scoreUs,scoreOpp,
+    oppOwnGoals,
     formation:em?.formation||getFormation(),lineup,subs,scorers,
     mom:matchMom||null,momName:momPlayer?.name||null,
     bestDef:matchBestDef||null,bestDef2:matchBestDef2||null
@@ -3542,14 +3605,21 @@ function renderRecords(){
     const res=m.scoreUs>m.scoreOpp?'🏆 승':m.scoreUs===m.scoreOpp?'🤝 무':'💔 패';
     const cardCls=m.scoreUs>m.scoreOpp?'win':m.scoreUs===m.scoreOpp?'draw':'lose';
 
-    const scorerRows=(m.scorers||[]).map(s=>`
+    const scorerRows=(m.scorers||[]).map(s=>{
+      const parts=[];
+      if(s.goals) parts.push(`골 ${s.goals}`);
+      if(s.assists>0) parts.push(`어시 ${s.assists}`);
+      if((s.ownGoals||0)>0) parts.push(`자책 ${s.ownGoals}`);
+      const icon=(s.ownGoals||0)>0&&!s.goals?'🥅':'⚽';
+      return `
       <div class="match-scorer-row">
-        <span class="match-scorer-icon">⚽</span>
+        <span class="match-scorer-icon">${icon}</span>
         <span class="match-scorer-name">${s.name}</span>
         <span class="match-scorer-pos">${s.pos}</span>
         <span class="match-scorer-ovr">${s.ovr!=null?s.ovr+' '+ovrStarsText(s.ovr):''}</span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text2)">골 ${s.goals}${s.assists>0?' · 어시 '+s.assists:''}</span>
-      </div>`).join('');
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)">${parts.join(' · ')||'—'}</span>
+      </div>`;
+    }).join('');
     const lineupTags=(m.lineup||[]).map(l=>{
       const qb=l.quarters&&l.quarters.length<4?`<span style="font-size:9px;opacity:.7">${quarterLabel(l.quarters)}</span>`:'';
       return `<span class="match-lineup-tag">${l.name}${qb}</span>`;
@@ -3572,13 +3642,14 @@ function renderRecords(){
     const wageTotal=Object.values(wages).reduce((s,w)=>s+w.total,0);
     const wageSection=wageRows?`<div class="match-wages" id="wages_${m.id}" style="display:none">${wageRows}</div>
       <button class="btn-wage-toggle" onclick="toggleWageSection(${m.id})">&#x1F4B0; &#xC218;&#xB2F9; &#xD655;&#xC778; (+${wageTotal}&#xC6D0;)</button>`:'';
+    const ogHint=(m.oppOwnGoals||0)>0?`<span class="match-og-tag">상대 자책 ${m.oppOwnGoals}</span>`:'';
     return `<div class="match-card ${cardCls}">
       <div class="match-score-row">
         <span class="match-team" style="text-align:right">${getDisplayMyTeam(m)}</span>
         <span class="match-score">${m.scoreUs} : ${m.scoreOpp}</span>
         <span class="match-team">${m.oppTeam}</span>
       </div>
-      <div class="match-meta">${formatDateDisplay(m.date)} · ${res}<span class="match-formation-badge">${m.formation}</span>${momBadge}${defBadges}</div>
+      <div class="match-meta">${formatDateDisplay(m.date)} · ${res}${ogHint}<span class="match-formation-badge">${m.formation}</span>${momBadge}${defBadges}</div>
       ${(m.lineup||[]).length?`<div class="match-lineup"><div class="match-lineup-title">&#xCD9C;&#xC804;</div><div class="match-lineup-tags">${lineupTags}${subTags}</div></div>`:''}
       ${scorerRows?`<div class="match-scorers">${scorerRows}</div>`:''}
       ${wageSection}
@@ -4776,6 +4847,7 @@ document.getElementById('matchModal').addEventListener('click',function(e){if(e.
 document.getElementById('adminModal')?.addEventListener('click',function(e){if(e.target===this)closeAdminModal();});
 document.getElementById('adminOptionsModal')?.addEventListener('click',function(e){if(e.target===this)closeAdminOptionsModal();});
 document.getElementById('pwChangeModal')?.addEventListener('click',function(e){if(e.target===this)closePwChangeModal();});
+document.getElementById('wageRatesModal')?.addEventListener('click',function(e){if(e.target===this)closeWageRatesModal();});
 document.getElementById('statHistoryModal')?.addEventListener('click',function(e){if(e.target===this)closeStatHistory();});
 document.getElementById('photoUrlModal')?.addEventListener('click',function(e){if(e.target===this)closePhotoUrlModal();});
 document.getElementById('scheduleModal')?.addEventListener('click',function(e){if(e.target===this)closeScheduleModal();});

@@ -3459,30 +3459,39 @@ function renderMatchModalEvents(em) {
     assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0,
     ownGoals:em?.scorers?.find(s=>s.pid===x.pid)?.ownGoals||0
   }]));
-  list.innerHTML=matchParticipants.map(x=>{
+  list.innerHTML=`<div class="player-event-row match-event-header">
+    <div class="player-event-head">선수</div>
+    <div class="event-stat-label">⚽ 골</div>
+    <div class="event-stat-label">🅰️ 어시</div>
+    <div class="event-stat-label">🥅 자책</div>
+  </div>`+matchParticipants.map(x=>{
     const subTag=x.type==='sub'?'<span class="match-part-sub">🔄교체</span>':'';
     const qTag=x.quarters?.length?`<span class="match-part-quarter">${quarterLabel(x.quarters)}</span>`:'';
     return `<div class="player-event-row">
-      <span class="player-event-name">${x.name}</span>${subTag}${qTag}
-      <span class="player-event-pos">${x.pos}</span>
-      <span class="player-event-ovr">${x.ovr!=null?x.ovr+' '+ovrStarsText(x.ovr):''}</span>
-      <span style="font-size:11px;color:var(--text2);margin-left:auto">⚽</span>
-      <div class="event-count">
-        <button class="btn-event" onclick="changeEvent(${x.pid},'goals',-1)">−</button>
-        <span class="event-num" id="g_${x.pid}">${matchEvents[x.pid].goals}</span>
-        <button class="btn-event" onclick="changeEvent(${x.pid},'goals',1)">+</button>
+      <div class="player-event-head">
+        <span class="player-event-name">${x.name}</span>${subTag}${qTag}
+        <span class="player-event-pos">${x.pos}</span>
       </div>
-      <span style="font-size:11px;color:var(--text2);margin-left:4px">🅰️</span>
-      <div class="event-count">
-        <button class="btn-event" onclick="changeEvent(${x.pid},'assists',-1)">−</button>
-        <span class="event-num" id="a_${x.pid}">${matchEvents[x.pid].assists}</span>
-        <button class="btn-event" onclick="changeEvent(${x.pid},'assists',1)">+</button>
+      <div class="event-stat-cell">
+        <div class="event-count">
+          <button class="btn-event" onclick="changeEvent(${x.pid},'goals',-1)">−</button>
+          <span class="event-num" id="g_${x.pid}">${matchEvents[x.pid].goals}</span>
+          <button class="btn-event" onclick="changeEvent(${x.pid},'goals',1)">+</button>
+        </div>
       </div>
-      <span style="font-size:11px;color:var(--text2);margin-left:4px">🥅</span>
-      <div class="event-count">
-        <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',-1)">−</button>
-        <span class="event-num" id="o_${x.pid}">${matchEvents[x.pid].ownGoals}</span>
-        <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',1)">+</button>
+      <div class="event-stat-cell">
+        <div class="event-count">
+          <button class="btn-event" onclick="changeEvent(${x.pid},'assists',-1)">−</button>
+          <span class="event-num" id="a_${x.pid}">${matchEvents[x.pid].assists}</span>
+          <button class="btn-event" onclick="changeEvent(${x.pid},'assists',1)">+</button>
+        </div>
+      </div>
+      <div class="event-stat-cell">
+        <div class="event-count">
+          <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',-1)">−</button>
+          <span class="event-num" id="o_${x.pid}">${matchEvents[x.pid].ownGoals}</span>
+          <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',1)">+</button>
+        </div>
       </div>
     </div>`;
   }).join('');

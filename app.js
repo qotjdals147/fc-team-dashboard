@@ -3456,15 +3456,13 @@ function renderMatchModalEvents(em) {
   }
   matchEvents=Object.fromEntries(matchParticipants.map(x=>[x.pid,{
     goals:em?.scorers?.find(s=>s.pid===x.pid)?.goals||0,
-    assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0,
-    ownGoals:em?.scorers?.find(s=>s.pid===x.pid)?.ownGoals||0
+    assists:em?.scorers?.find(s=>s.pid===x.pid)?.assists||0
   }]));
   list.innerHTML=`<div class="match-event-table">
     <div class="match-event-row match-event-head-row">
       <div class="match-event-namecol">선수</div>
       <div class="match-event-stat match-event-stat-h" title="골">⚽</div>
       <div class="match-event-stat match-event-stat-h" title="어시스트">🅰️</div>
-      <div class="match-event-stat match-event-stat-h" title="자책">🥅</div>
     </div>
     ${matchParticipants.map(x=>{
     const subTag=x.type==='sub'?' · 🔄교체':'';
@@ -3487,13 +3485,6 @@ function renderMatchModalEvents(em) {
           <button class="btn-event" onclick="changeEvent(${x.pid},'assists',-1)">−</button>
           <span class="event-num" id="a_${x.pid}">${matchEvents[x.pid].assists}</span>
           <button class="btn-event" onclick="changeEvent(${x.pid},'assists',1)">+</button>
-        </div>
-      </div>
-      <div class="match-event-stat">
-        <div class="event-count">
-          <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',-1)">−</button>
-          <span class="event-num" id="o_${x.pid}">${matchEvents[x.pid].ownGoals}</span>
-          <button class="btn-event" onclick="changeEvent(${x.pid},'ownGoals',1)">+</button>
         </div>
       </div>
     </div>`;
@@ -3559,9 +3550,9 @@ function selectBestDef2(pid){
   const b=document.getElementById(id);if(b)b.classList.add('active');
 }
 function changeEvent(pid,type,delta){
-  if(!matchEvents[pid])matchEvents[pid]={goals:0,assists:0,ownGoals:0};
+  if(!matchEvents[pid])matchEvents[pid]={goals:0,assists:0};
   matchEvents[pid][type]=Math.max(0,matchEvents[pid][type]+delta);
-  const idMap={goals:'g_',assists:'a_',ownGoals:'o_'};
+  const idMap={goals:'g_',assists:'a_'};
   const el=document.getElementById((idMap[type]||'g_')+pid);
   if(el) el.textContent=matchEvents[pid][type];
 }
@@ -3576,20 +3567,16 @@ function saveMatch(){
   const oppOwnGoals=parseInt(document.getElementById('matchOppOwnGoals')?.value,10)||0;
   const homeAway=null; // 홈/어웨이 미사용 (하위호환용 null 유지)
   const totalGoals=matchParticipants.reduce((s,x)=>s+(matchEvents[x.pid]?.goals||0),0);
-  const totalOurOwnGoals=matchParticipants.reduce((s,x)=>s+(matchEvents[x.pid]?.ownGoals||0),0);
   if(totalGoals+oppOwnGoals!==scoreUs){
     alert(`선수 골(${totalGoals}) + 상대 자책(${oppOwnGoals}) = ${totalGoals+oppOwnGoals}, 우리 팀 득점(${scoreUs})과 일치하지 않습니다.`);
     return;
   }
-  if(totalOurOwnGoals>0&&scoreOpp<totalOurOwnGoals){
-    if(!confirm(`우리 자책골 ${totalOurOwnGoals}개 — 상대 득점(${scoreOpp})에 반영됐는지 확인해주세요.\n그래도 저장할까요?`)) return;
-  }
   myTeamName=myTeam;
   const em=editingMatchId?matches.find(m=>m.id===editingMatchId):null;
   const scorers=matchParticipants.map(x=>{
-    const ev=matchEvents[x.pid]||{goals:0,assists:0,ownGoals:0};
-    return{pid:x.pid,name:x.name,pos:x.pos,ovr:x.ovr,goals:ev.goals,assists:ev.assists,ownGoals:ev.ownGoals||0};
-  }).filter(x=>x.goals>0||x.assists>0||(x.ownGoals||0)>0);
+    const ev=matchEvents[x.pid]||{goals:0,assists:0};
+    return{pid:x.pid,name:x.name,pos:x.pos,ovr:x.ovr,goals:ev.goals,assists:ev.assists};
+  }).filter(x=>x.goals>0||x.assists>0);
   const lineup=matchParticipants.filter(x=>x.type!=='sub').map(({pid,name,pos,ovr,quarters})=>({pid,name,pos,ovr,...(quarters?.length?{quarters}:{})}));
   const subs=matchParticipants.filter(x=>x.type==='sub').map(({pid,name,pos,ovr,pairedWith,quarters})=>({pid,name,pos,ovr,pairedWith,...(quarters?.length?{quarters}:{})}));
   const momPlayer=matchMom?players.find(p=>p.id===matchMom):null;
@@ -3622,11 +3609,9 @@ function renderRecords(){
       const parts=[];
       if(s.goals) parts.push(`골 ${s.goals}`);
       if(s.assists>0) parts.push(`어시 ${s.assists}`);
-      if((s.ownGoals||0)>0) parts.push(`자책 ${s.ownGoals}`);
-      const icon=(s.ownGoals||0)>0&&!s.goals?'🥅':'⚽';
       return `
       <div class="match-scorer-row">
-        <span class="match-scorer-icon">${icon}</span>
+        <span class="match-scorer-icon">⚽</span>
         <span class="match-scorer-name">${s.name}</span>
         <span class="match-scorer-pos">${s.pos}</span>
         <span class="match-scorer-ovr">${s.ovr!=null?s.ovr+' '+ovrStarsText(s.ovr):''}</span>

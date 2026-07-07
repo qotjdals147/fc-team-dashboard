@@ -4041,6 +4041,10 @@ function isAnyModalOpen() {
   return !!(document.querySelector('.modal-bg.open') || document.getElementById('posPopup')?.classList.contains('open'));
 }
 
+function isTreasurerTabActive() {
+  return !!document.getElementById('tab-treasurer')?.classList.contains('active');
+}
+
 function refreshCurrentTab() {
   const tabIds = ['home','roster','formation','records','stats','treasurer'];
   for (const t of tabIds) {
@@ -4061,7 +4065,7 @@ function refreshCurrentTab() {
 }
 
 async function pollRefresh() {
-  if (isAnyModalOpen() || drag.active) return;
+  if (isAnyModalOpen() || drag.active || isTreasurerTabActive()) return;
   try {
     const data = await apiLoadAll(true);
     applyRemoteData(data);
@@ -4794,6 +4798,11 @@ function deleteExemption(id) {
 }
 
 // ── 지출 영수증 이미지 ──
+function receiptMemoText(note, maxLen = 20) {
+  const t = String(note || '-').trim() || '-';
+  return t.length > maxLen ? t.slice(0, maxLen - 1) + '\u2026' : t;
+}
+
 async function exportTreasurerReceipt() {
   const ym = getTrYearMonth();
   const monthExpenses = filterExpensesByMonth(expenses.filter(e => e.status !== 'cancelled'), ym)
@@ -4804,9 +4813,13 @@ async function exportTreasurerReceipt() {
   const lineH = 22 * sc;
   const headerH = 56 * sc;
   const rowH = 20 * sc;
+  const colDate = pad;
+  const colCat = pad + 52 * sc;
+  const colAmt = pad + 132 * sc;
+  const colMemo = pad + 212 * sc;
   const tableH = Math.max(rowH, monthExpenses.length * rowH + lineH);
   const canvas = document.createElement('canvas');
-  canvas.width = 360 * sc + pad * 2;
+  canvas.width = 440 * sc + pad * 2;
   canvas.height = headerH + lineH + tableH + pad * 2 + 24 * sc;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#141412';
@@ -4823,9 +4836,10 @@ async function exportTreasurerReceipt() {
   let y = headerH + pad;
   ctx.fillStyle = '#888';
   ctx.font = `600 ${9 * sc}px sans-serif`;
-  ctx.fillText('\uB0A0\uC9DC', pad, y);
-  ctx.fillText('\uC0AC\uC6A9\uCC98', pad + 72 * sc, y);
-  ctx.fillText('\uAE08\uC561', pad + 200 * sc, y);
+  ctx.fillText('\uB0A0\uC9DC', colDate, y);
+  ctx.fillText('\uC0AC\uC6A9\uCC98', colCat, y);
+  ctx.fillText('\uAE08\uC561', colAmt, y);
+  ctx.fillText('\uBA54\uBAA8', colMemo, y);
   y += lineH;
   ctx.strokeStyle = 'rgba(255,255,255,.15)';
   ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(canvas.width - pad, y); ctx.stroke();
@@ -4835,9 +4849,12 @@ async function exportTreasurerReceipt() {
     const isSettle = !!ex.settlementId;
     const cat = isSettle ? '\uB9AC\uC6CC\uB4DC \uC815\uC0B0' : (ex.category || '-');
     ctx.fillStyle = '#d0d0cd';
-    ctx.fillText(formatDateDisplay(ex.date).slice(5), pad, y);
-    ctx.fillText(cat.slice(0, 12), pad + 72 * sc, y);
-    ctx.fillText(fmtMoney(ex.amount), pad + 200 * sc, y);
+    ctx.fillText(formatDateDisplay(ex.date).slice(5), colDate, y);
+    ctx.fillText(cat.slice(0, 10), colCat, y);
+    ctx.fillText(fmtMoney(ex.amount), colAmt, y);
+    ctx.fillStyle = '#a8a8a5';
+    ctx.fillText(receiptMemoText(ex.note), colMemo, y);
+    ctx.fillStyle = '#d0d0cd';
     y += rowH;
   });
   if (!monthExpenses.length) {

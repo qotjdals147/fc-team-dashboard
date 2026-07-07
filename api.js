@@ -39,19 +39,34 @@ async function sbSelect(table) {
   return res.json();
 }
 
-// ── 테이블 전체 교체 ──
+// ── 테이블 전체 교체 (POST 선행 — 실패 시 기존 행 유지) ──
 async function sbUpsert(table, rows) {
-  if (!rows || !rows.length) {
-    await fetch(SB.url(table, '?id=gte.0'), { method: 'DELETE', headers: SB.headers });
+  const safeRows = rows || [];
+  if (!safeRows.length) {
+    const res = await fetch(SB.url(table, '?id=gte.0'), { method: 'DELETE', headers: SB.headers });
+    if (!res.ok) throw new Error(`${table} 삭제 실패: ${res.status} ${await res.text()}`);
     return;
   }
-  await fetch(SB.url(table, '?id=gte.0'), { method: 'DELETE', headers: SB.headers });
   const res = await fetch(SB.url(table), {
     method: 'POST',
-    headers: SB.headers,
-    body: JSON.stringify(rows),
+    headers: { ...SB.headers, 'Prefer': 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify(safeRows),
   });
   if (!res.ok) throw new Error(`${table} 저장 실패: ${await res.text()}`);
+  const ids = safeRows.map(r => r.id).filter(id => id != null && id !== '');
+  if (!ids.length) return;
+  const delRes = await fetch(SB.url(table, `?id=not.in.(${ids.join(',')})`), {
+    method: 'DELETE',
+    headers: SB.headers,
+  });
+  if (!delRes.ok) throw new Error(`${table} 정리 실패: ${delRes.status} ${await delRes.text()}`);
+}
+
+let _saveChain = Promise.resolve();
+function enqueueSave(fn) {
+  const run = _saveChain.then(fn, fn);
+  _saveChain = run.catch(() => {});
+  return run;
 }
 
 // ── meta (key/value) ──
@@ -183,8 +198,9 @@ async function apiLoadAll(silent = false) {
   };
 }
 
-// ── 부분 저장 ──
+// ── 부분 저장 (동시 저장 직렬화 — DELETE/POST 경합 방지) ──
 async function apiSavePartial(data) {
+  return enqueueSave(async () => {
   syncUI('saving', '저장 중…');
   try {
     const tasks = [];
@@ -207,6 +223,7 @@ async function apiSavePartial(data) {
     syncUI('error', '저장 실패');
     throw e;
   }
+  });
 }
 
 // ── Storage: 팀 사진 (FC 제로 A안 — bucket team-photos) ──

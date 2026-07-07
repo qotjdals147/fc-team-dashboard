@@ -887,9 +887,10 @@ function updateSyncBar(state, msg) {
   if (text) text.textContent = msg;
 }
 function handleSaveError(e) {
-  console.error(e);
+  console.error('[저장 실패]', e);
   updateSyncBar('error', '저장 실패');
-  alert('저장에 실패했습니다. 인터넷 연결을 확인해주세요.');
+  const msg = (e && e.message) ? String(e.message) : '';
+  alert(msg && msg.includes('실패') ? msg : '저장에 실패했습니다. 인터넷 연결을 확인해주세요.');
 }
 function normalizeFieldTokens(raw) {
   return (raw || []).map(t => {
@@ -4135,7 +4136,33 @@ function nextDueId() {
   const max = dues.reduce((m, d) => Math.max(m, Math.floor(Number(d.id)) || 0), 0);
   return max + 1;
 }
-async function persistExpenses()    { await apiSavePartial({ expenses });    localStorage.setItem('fc_expenses',    JSON.stringify(expenses));    }
+function nextExpenseId() {
+  const max = expenses.reduce((m, e) => Math.max(m, Math.floor(Number(e.id)) || 0), 0);
+  return max + 1;
+}
+function nextSettlementRowId() {
+  const max = settlements.reduce((m, s) => Math.max(m, Math.floor(Number(s.id)) || 0), 0);
+  return max + 1;
+}
+function expenseForDb(e) {
+  const row = {
+    id: Math.floor(Number(e.id)) || nextExpenseId(),
+    date: normalizeDate(e.date),
+    amount: Math.floor(Number(e.amount)) || 0,
+    category: String(e.category || ''),
+    note: String(e.note || ''),
+    status: e.status || 'active',
+  };
+  if (e.settlementId != null && e.settlementId !== '') {
+    row.settlementId = Math.floor(Number(e.settlementId));
+  }
+  return row;
+}
+async function persistExpenses() {
+  const rows = expenses.map(expenseForDb);
+  await apiSavePartial({ expenses: rows });
+  localStorage.setItem('fc_expenses', JSON.stringify(expenses));
+}
 async function persistSettlements() { await apiSavePartial({ settlements }); localStorage.setItem('fc_settlements', JSON.stringify(settlements)); }
 async function persistDisciplines() { await apiSavePartial({ disciplines }); localStorage.setItem('fc_disciplines', JSON.stringify(disciplines)); }
 
@@ -4489,7 +4516,7 @@ function saveDue() {
     const idx = dues.findIndex(x => x.id == editingDueId);
     if (idx >= 0) dues[idx] = { ...dues[idx], ...record };
   } else {
-    dues.push({ id: Date.now(), ...record });
+    dues.push({ id: nextDueId(), ...record });
   }
   closeDuesModal();
   persistDues().catch(handleSaveError);
@@ -4516,21 +4543,28 @@ function openExpenseModal(id) {
   document.getElementById('expenseModal').classList.add('open');
 }
 function closeExpenseModal() { document.getElementById('expenseModal').classList.remove('open'); }
-function saveExpense() {
+async function saveExpense() {
   const date     = normalizeDate(document.getElementById('expenseDate').value);
-  const amount   = parseInt(document.getElementById('expenseAmount').value);
+  const amount   = parseInt(document.getElementById('expenseAmount').value, 10);
   const category = document.getElementById('expenseCategory').value.trim();
   const note     = document.getElementById('expenseNote').value.trim();
   if (!date || !amount || !category || !note) { alert('\uB0A0\uC9DC \u00B7 \uAE08\uC561 \u00B7 \uC0AC\uC6A9\uCC98 \u00B7 \uBA54\uBAA8(\uC99D\uBE59)\uB294 \uD544\uC218\uC785\uB2C8\uB2E4'); return; }
+  const snapshot = expenses.map(e => ({ ...e }));
   if (editingExpenseId) {
     const idx = expenses.findIndex(x=>x.id==editingExpenseId);
     if (idx>=0) expenses[idx] = {...expenses[idx], date, amount, category, note};
   } else {
-    expenses.push({ id: Date.now(), date, amount, category, note, status:'active' });
+    expenses.push({ id: nextExpenseId(), date, amount, category, note, status:'active' });
   }
   closeExpenseModal();
-  persistExpenses().catch(handleSaveError);
   renderTreasurer();
+  try {
+    await persistExpenses();
+  } catch (e) {
+    expenses = snapshot;
+    renderTreasurer();
+    handleSaveError(e);
+  }
 }
 function deleteExpense(id) {
   if (!confirm('\uC774 \uC9C0\uCD9C \uAE30\uB85D\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?')) return;
@@ -4595,6 +4629,7 @@ function runSettlementBatch(from, to, pids) {
   const settledItems = [];
   const disciplineNotes = [];
   let linkedDisciplineOnly = false;
+  let nextSettleId = nextSettlementRowId();
   pids.forEach(pid => {
     const breakdown = computeUnsettledWageBreakdown(pid, from, to);
     const { gross, discipline, net } = breakdown;
@@ -4611,7 +4646,7 @@ function runSettlementBatch(from, to, pids) {
       disciplineNotes.push(`${p?.name || pid}: \uC9D5\uACC4 -${discipline.toLocaleString()}\uC6D0 \u2192 \uC2E4\uC9C0\uAE09 ${net.toLocaleString()}\uC6D0`);
     }
     settledItems.push({
-      id: Date.now() + Math.random(),
+      id: nextSettleId++,
       groupId: settlementGroupId,
       startDate: from,
       endDate: to,
@@ -4632,7 +4667,7 @@ function runSettlementBatch(from, to, pids) {
   let note = `\uB9AC\uC6CC\uB4DC \uC815\uC0B0 ${formatDateDisplay(from)}~${formatDateDisplay(to)} / ${settledItems.length}\uBA85(${names}) / \uCD1D ${fmtMoney(total)}`;
   if (disciplineNotes.length) note += ' / ' + disciplineNotes.join(' ');
   const newExpense = {
-    id: Date.now() + 1,
+    id: nextExpenseId(),
     date: today,
     amount: total,
     category: '\uB9AC\uC6CC\uB4DC \uC815\uC0B0',

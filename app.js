@@ -4803,6 +4803,11 @@ function receiptMemoText(note, maxLen = 20) {
   return t.length > maxLen ? t.slice(0, maxLen - 1) + '\u2026' : t;
 }
 
+function treasurerReceiptFilename(ym) {
+  const [y, m] = String(ym || getTrYearMonth() || '').split('-');
+  return `\uC9C0\uCD9C\uC601\uC218\uC99D(${y || new Date().getFullYear()}.${m || '01'}).png`;
+}
+
 async function exportTreasurerReceipt() {
   const ym = getTrYearMonth();
   const monthExpenses = filterExpensesByMonth(expenses.filter(e => e.status !== 'cancelled'), ym)
@@ -4861,16 +4866,9 @@ async function exportTreasurerReceipt() {
     ctx.fillStyle = '#666';
     ctx.fillText('\uC9C0\uCD9C \uAE30\uB85D \uC5C6\uC74C', pad, y);
   }
-  const filename = `receipt-${ym}-${team.replace(/[^\w가-힣]/g, '').slice(0, 8) || 'FC'}.png`;
-  canvas.toBlob(async blob => {
+  const filename = treasurerReceiptFilename(ym);
+  canvas.toBlob(blob => {
     if (!blob) { alert('\uC774\uBBF8\uC9C0 \uC0DD\uC131\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4'); return; }
-    const file = new File([blob], filename, { type: 'image/png' });
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `${team} ${formatYearMonthDisplay(ym)} \uC9C0\uCD9C` });
-        return;
-      } catch (e) { if (e.name === 'AbortError') return; }
-    }
     downloadPngBlob(blob, filename);
   }, 'image/png');
 }

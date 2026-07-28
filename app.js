@@ -2469,7 +2469,7 @@ function fitFieldAspect(maxW, maxH, minW) {
   H = Math.round(W * FIELD_ASPECT);
   return { W, H };
 }
-/** field-inner(CSS aspect-ratio) 실측 우선 — 벤치 높이 변동과 분리 */
+/** 일반: field-inner(CSS aspect-ratio) 실측 · 큰 화면: v114 fitFieldAspect (inner 실측 사용 안 함) */
 function computeFieldCanvasSize() {
   const inner = document.getElementById('fieldInner');
   const wrap = document.getElementById('fieldWrap');
@@ -2477,21 +2477,22 @@ function computeFieldCanvasSize() {
   const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   if (!wrap) return { W: 280, H: Math.round(280 * FIELD_ASPECT) };
 
-  if (inner) {
-    const iw = inner.clientWidth;
-    const ih = inner.clientHeight;
-    if (iw > 40 && ih > 40) return { W: iw, H: ih };
-  }
-
   if (presentMode) {
     const panelW = vpW >= 600 ? 210 : 0;
+    const panelLeftW = vpW >= 768 ? 260 : 0;
     const presentBarH = 36;
     const formBarH = 36;
-    const availW = vpW - 24 - panelW * 2;
+    const availW = vpW - 24 - panelW - panelLeftW;
     const wrapH = wrap.clientHeight > 40 ? wrap.clientHeight : vpH - presentBarH - formBarH - 80;
     const maxH = Math.max(120, wrapH - FIELD_EXPORT_RESERVE);
     const maxW = Math.max(240, Math.min(availW, wrap.clientWidth || availW) - 8);
     return fitFieldAspect(maxW, maxH, 240);
+  }
+
+  if (inner) {
+    const iw = inner.clientWidth;
+    const ih = inner.clientHeight;
+    if (iw > 40 && ih > 40) return fitFieldAspect(iw, ih, 200);
   }
 
   const maxW = Math.max(200, (wrap.clientWidth || vpW) - 8);

@@ -279,8 +279,11 @@ body.presentation-mode .field-export-btn {
   background:rgba(0,0,0,0.55); border-color:rgba(255,255,255,0.4);
 }
 .field-wrap { flex:1; min-height:0; display:flex; justify-content:center; align-items:center; padding:4px 8px 8px; overflow:hidden; }
-.field-inner { position:relative; flex-shrink:0; width:100%; max-width:100%; max-height:100%; aspect-ratio:100/145; height:auto; }
-.field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; width:100%; height:100%; }
+/* 일반 모드만 aspect-ratio 고정 — 큰 화면은 JS fit (v114) 유지 */
+body:not(.presentation-mode) .field-inner { position:relative; flex-shrink:0; width:100%; max-width:100%; max-height:100%; aspect-ratio:100/145; height:auto; }
+body:not(.presentation-mode) .field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; width:100%; height:100%; }
+body.presentation-mode .field-inner { position:relative; flex-shrink:0; width:auto; max-width:100%; max-height:100%; height:auto; }
+body.presentation-mode .field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; max-width:100%; max-height:100%; }
 #tokens { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
 #tokens .player-token { pointer-events:auto; }
 :root { --tk: 1; }
@@ -668,7 +671,7 @@ body.presentation-mode .field-wrap {
   padding:4px 0 !important;
   overflow:hidden;
 }
-body.presentation-mode .field-inner { height:auto !important; }
+body.presentation-mode .field-inner { height:auto !important; width:auto !important; aspect-ratio:unset !important; }
 
 /* 벤치 스트립: 하단 수평 배치 */
 /* 벤치 섹션은 프레젠테이션 모드에서 숨김 (좌측 패널에 표시) */

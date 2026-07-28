@@ -9,7 +9,7 @@ function togglePresentMode() {
   const btn = document.getElementById('btnPresent');
   if (btn) {
     btn.classList.toggle('active', presentMode);
-    btn.textContent = presentMode ? '✕ 발표 종료' : '🖥️ 발표';
+    btn.textContent = presentMode ? '✕ 큰 화면 종료' : '🖥️ 큰 화면';
   }
   // 발표 모드 해제 시 현재 탭(포메이션)이 보이도록 강제 적용
   if (!presentMode) {
@@ -2460,38 +2460,43 @@ function applyFieldTokenScale(W) {
   document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
   return tkScale;
 }
-/** field-wrap 실측 기준 — viewport 비율(maxH) 혼용 제거, export 버튼 여백 확보 */
+function fitFieldAspect(maxW, maxH, minW) {
+  const floor = minW || 200;
+  let W = maxW;
+  let H = Math.round(W * FIELD_ASPECT);
+  if (H > maxH) { H = maxH; W = Math.round(H / FIELD_ASPECT); }
+  W = Math.max(floor, W);
+  H = Math.round(W * FIELD_ASPECT);
+  return { W, H };
+}
+/** field-inner(CSS aspect-ratio) 실측 우선 — 벤치 높이 변동과 분리 */
 function computeFieldCanvasSize() {
+  const inner = document.getElementById('fieldInner');
   const wrap = document.getElementById('fieldWrap');
   const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   if (!wrap) return { W: 280, H: Math.round(280 * FIELD_ASPECT) };
 
+  if (inner) {
+    const iw = inner.clientWidth;
+    const ih = inner.clientHeight;
+    if (iw > 40 && ih > 40) return { W: iw, H: ih };
+  }
+
   if (presentMode) {
     const panelW = vpW >= 600 ? 210 : 0;
     const presentBarH = 36;
+    const formBarH = 36;
     const availW = vpW - 24 - panelW * 2;
-    const wrapH = wrap.clientHeight > 40 ? wrap.clientHeight : vpH - presentBarH - 80;
+    const wrapH = wrap.clientHeight > 40 ? wrap.clientHeight : vpH - presentBarH - formBarH - 80;
     const maxH = Math.max(120, wrapH - FIELD_EXPORT_RESERVE);
     const maxW = Math.max(240, Math.min(availW, wrap.clientWidth || availW) - 8);
-    let W = maxW;
-    let H = Math.round(W * FIELD_ASPECT);
-    if (H > maxH) { H = maxH; W = Math.round(H / FIELD_ASPECT); }
-    W = Math.max(240, W);
-    H = Math.round(W * FIELD_ASPECT);
-    return { W, H };
+    return fitFieldAspect(maxW, maxH, 240);
   }
 
-  const wrapW = wrap.clientWidth || vpW;
-  const wrapH = wrap.clientHeight;
-  const maxW = Math.max(200, wrapW - 8);
-  const maxH = Math.max(120, (wrapH > 40 ? wrapH : vpH * 0.42) - FIELD_EXPORT_RESERVE);
-  let W = maxW;
-  let H = Math.round(W * FIELD_ASPECT);
-  if (H > maxH) { H = maxH; W = Math.round(H / FIELD_ASPECT); }
-  W = Math.max(200, W);
-  H = Math.round(W * FIELD_ASPECT);
-  return { W, H };
+  const maxW = Math.max(200, (wrap.clientWidth || vpW) - 8);
+  const maxH = Math.max(120, (wrap.clientHeight > 40 ? wrap.clientHeight : vpH * 0.42) - FIELD_EXPORT_RESERVE);
+  return fitFieldAspect(maxW, maxH, 200);
 }
 function scheduleFormationLayout(highlightSlot) {
   if (_formationLayoutRaf) cancelAnimationFrame(_formationLayoutRaf);
@@ -2560,12 +2565,19 @@ function drawFieldCanvas(highlightSlot, opts) {
     W = fieldSize.w;
     H = fieldSize.h;
   } else {
-    ({ W, H } = computeFieldCanvasSize());
-    canvas.width = W;
-    canvas.height = H;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    fieldSize = { w: W, h: H };
+    const next = computeFieldCanvasSize();
+    if (fieldSize.w && Math.abs(fieldSize.w - next.W) < 2 && Math.abs(fieldSize.h - next.H) < 2) {
+      W = fieldSize.w;
+      H = fieldSize.h;
+    } else {
+      W = next.W;
+      H = next.H;
+      canvas.width = W;
+      canvas.height = H;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      fieldSize = { w: W, h: H };
+    }
   }
   applyFieldTokenScale(W);
   drawGrass(canvas);

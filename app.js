@@ -18,9 +18,9 @@ function togglePresentMode() {
   }
   // 레이아웃 확정 후 캔버스 재계산 (두 번 RAF로 안정적 크기 확보)
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    drawFieldCanvas();
-    renderField();
+    fieldSize = { w: 0, h: 0 };
     renderBench();
+    scheduleFormationLayout(-1);
     renderAvailPanel();
     if (presentMode) { applyPresentScales(); updatePresentPanel(); }
     updateAvailBtn();
@@ -41,7 +41,8 @@ function stepPresentScale(key, dir) {
     drawFormationSlots(canvas.getContext('2d'), fieldSize.w, fieldSize.h, slotHighlight);
     repositionFieldTokens();
   } else if (key === 'token') {
-    drawFieldCanvas();
+    fieldSize = { w: 0, h: 0 };
+    scheduleFormationLayout(-1);
   }
   updatePresentPanel();
   persistMeta().catch(() => {});
@@ -384,13 +385,24 @@ function formatPlayerValue(wageWon) {
 function parseJerseyInput(raw) {
   const s = String(raw ?? '').trim();
   if (s === '') return null;
-  const n = parseInt(s, 10);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return n;
+  if (!/^\d+$/.test(s)) return null;
+  return s;
+}
+function normalizeJerseyFromDb(jersey) {
+  if (jersey == null || jersey === '') return null;
+  return String(jersey);
 }
 function formatJerseyDisplay(jersey) {
-  if (jersey == null) return '—';
+  if (jersey == null || jersey === '') return '—';
   return String(jersey);
+}
+function jerseySortNum(jersey) {
+  if (jersey == null || jersey === '') return 999;
+  const n = parseInt(String(jersey), 10);
+  return Number.isFinite(n) ? n : 999;
+}
+function jerseyTag(jersey) {
+  return jersey != null && jersey !== '' ? '#' + jersey + ' ' : '';
 }
 
 // ── 수당 기준 (meta.wageRates로 오버라이드 가능) ──
@@ -716,9 +728,7 @@ function switchQuarter(q) {
   }
   updateQuarterButtons();
   updateQuarterCopyBtns();
-  drawFieldCanvas(undefined, { preserveSize: true });
   renderField();
-  renderBench();
   updatePresentPanel();
 }
 function getQuarterSnapshot(q) {
@@ -737,8 +747,8 @@ function applyQuarterSnapshot(qd) {
   const formation = resolveFormation(qd.formation, fieldTokens);
   setFormationSelect(formation);
   if (formation) reconcileFieldTokensToFormation();
-  drawFieldCanvas(undefined, { preserveSize: true });
   renderField();
+  updatePresentPanel();
 }
 /** fromQ 라인업 → 다음 쿼터로 복사 (쿼터 탭 전환과 분리, 현재 화면 유지) */
 function copyQuarterForward(fromQ) {
@@ -962,7 +972,7 @@ function migratePlayerPos(p) {
 
 function applyRemoteData(data) {
   players = (data.players?.length ? data.players : DEFAULT_PLAYERS.map(p => ({...p})))
-    .map(p => normalizePlayerOvr(migratePlayerPos({...p})));
+    .map(p => normalizePlayerOvr(migratePlayerPos({...p, jersey: normalizeJerseyFromDb(p.jersey)})));
   matches = normalizeMatchDates(data.matches || []);
   myTeamName = data.meta?.myTeam || '';
   if (!myTeamName) myTeamName = localStorage.getItem('fc_myteam') || '';
@@ -1103,7 +1113,7 @@ async function maybeMigrateLocal(data) {
 }
 function loadLocalFallback() {
   const s = localStorage.getItem('fc_players');
-  players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr(migratePlayerPos({...p})));
+  players = (s ? JSON.parse(s) : DEFAULT_PLAYERS.map(p => ({...p}))).map(p => normalizePlayerOvr(migratePlayerPos({...p, jersey: normalizeJerseyFromDb(p.jersey)})));
   matches = normalizeMatchDates(JSON.parse(localStorage.getItem('fc_matches') || '[]'));
   const rawSaves = JSON.parse(localStorage.getItem('fc_saves') || '[]');
   formationSaves = rawSaves.map(sv => {
@@ -1180,11 +1190,6 @@ async function bootstrapApp() {
     if (f) saveFormationLocal(f);
     remapTokensToNewFormation();
     slotHighlight = -1;
-    if (fieldSize.w && fieldSize.h) {
-      drawFieldCanvas(-1, { preserveSize: true });
-    } else {
-      drawFieldCanvas(-1);
-    }
     renderField();
     persistField().catch(handleSaveError);
     // 비관리자용 포메이션 레이블 갱신
@@ -1496,12 +1501,7 @@ function renderHome() {
   if (countEl) countEl.textContent = `(${members.length}명)`;
   const grid = document.getElementById('homeMemberGrid');
   if (grid) {
-    const sortFn = (a, b) => {
-      if (a.jersey == null && b.jersey == null) return 0;
-      if (a.jersey == null) return 1;
-      if (b.jersey == null) return -1;
-      return a.jersey - b.jersey;
-    };
+    const sortFn = (a, b) => jerseySortNum(a.jersey) - jerseySortNum(b.jersey);
     const sortedMembers = [...members].sort(sortFn);
     const sortedMercs   = [...mercenaries].sort(sortFn);
     const memberChips = sortedMembers.map(p =>
@@ -1994,7 +1994,7 @@ function openEditModal(id) {
   editingId=id;
   document.getElementById('modalTitle').textContent='선수 편집';
   document.getElementById('inputName').value=p.name;
-  document.getElementById('inputJersey').value = p.jersey != null ? p.jersey : '';
+  document.getElementById('inputJersey').value = p.jersey != null && p.jersey !== '' ? String(p.jersey) : '';
   document.getElementById('inputFormBonus').value=p.formBonus||0;
   updateFormBonusPreview();
   buildPosCheckboxes();
@@ -2449,12 +2449,61 @@ function findBestSlot(pos, slots, labels, excludePid) {
 
 // ── 필드 캔버스 ──
 const FIELD_SCALE_REF = 340;
+const FIELD_ASPECT = 1.45;
+const FIELD_EXPORT_RESERVE = 52;
+let _formationLayoutRaf = null;
+
 function fieldPad(W) { return Math.max(8, Math.round(W * 16 / 400)); }
 function applyFieldTokenScale(W) {
   const baseScale = presentMode ? Math.max(0.6, W / FIELD_SCALE_REF) : Math.min(1, Math.max(0.6, W / FIELD_SCALE_REF));
   const tkScale = presentMode ? baseScale * (presentScales.token || 1) : baseScale;
   document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
   return tkScale;
+}
+/** field-wrap 실측 기준 — viewport 비율(maxH) 혼용 제거, export 버튼 여백 확보 */
+function computeFieldCanvasSize() {
+  const wrap = document.getElementById('fieldWrap');
+  const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+  if (!wrap) return { W: 280, H: Math.round(280 * FIELD_ASPECT) };
+
+  if (presentMode) {
+    const panelW = vpW >= 600 ? 210 : 0;
+    const presentBarH = 36;
+    const availW = vpW - 24 - panelW * 2;
+    const wrapH = wrap.clientHeight > 40 ? wrap.clientHeight : vpH - presentBarH - 80;
+    const maxH = Math.max(120, wrapH - FIELD_EXPORT_RESERVE);
+    const maxW = Math.max(240, Math.min(availW, wrap.clientWidth || availW) - 8);
+    let W = maxW;
+    let H = Math.round(W * FIELD_ASPECT);
+    if (H > maxH) { H = maxH; W = Math.round(H / FIELD_ASPECT); }
+    W = Math.max(240, W);
+    H = Math.round(W * FIELD_ASPECT);
+    return { W, H };
+  }
+
+  const wrapW = wrap.clientWidth || vpW;
+  const wrapH = wrap.clientHeight;
+  const maxW = Math.max(200, wrapW - 8);
+  const maxH = Math.max(120, (wrapH > 40 ? wrapH : vpH * 0.42) - FIELD_EXPORT_RESERVE);
+  let W = maxW;
+  let H = Math.round(W * FIELD_ASPECT);
+  if (H > maxH) { H = maxH; W = Math.round(H / FIELD_ASPECT); }
+  W = Math.max(200, W);
+  H = Math.round(W * FIELD_ASPECT);
+  return { W, H };
+}
+function scheduleFormationLayout(highlightSlot) {
+  if (_formationLayoutRaf) cancelAnimationFrame(_formationLayoutRaf);
+  _formationLayoutRaf = requestAnimationFrame(() => {
+    _formationLayoutRaf = requestAnimationFrame(() => {
+      _formationLayoutRaf = null;
+      if (!document.getElementById('tab-formation')?.classList.contains('active')) return;
+      drawFieldCanvas(highlightSlot);
+      paintFieldTokens();
+      updateQuarterCopyBtns();
+    });
+  });
 }
 function getCanvasRect() { return document.getElementById('fieldCanvas').getBoundingClientRect(); }
 function pointerToNorm(clientX, clientY) {
@@ -2503,55 +2552,27 @@ function drawFormationSlots(ctx, W, H, nearSlot) {
 }
 function drawFieldCanvas(highlightSlot, opts) {
   if (highlightSlot !== undefined) slotHighlight = highlightSlot;
-  const preserveSize = opts && opts.preserveSize && fieldSize.w && fieldSize.h;
-  const canvas=document.getElementById('fieldCanvas');
-  const wrap=document.getElementById('fieldWrap');
-  const RATIO=1.45;
-  const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-  const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-
+  const skipResize = opts && opts.skipResize && fieldSize.w && fieldSize.h;
+  const canvas = document.getElementById('fieldCanvas');
+  if (!canvas) return;
   let W, H;
-  if (preserveSize) {
+  if (skipResize) {
     W = fieldSize.w;
     H = fieldSize.h;
-  } else if (presentMode) {
-    // 발표 모드: 좌/우 패널(PC 각 210px) 고려해서 필드 너비 계산
-    const panelW = vpW >= 600 ? 210 : 0;
-    const presentBarH = 36;
-    const benchH = 64;
-    const availH = vpH - presentBarH - benchH - 12;
-    const availW = vpW - 24 - panelW * 2;
-    H = Math.min(availH, Math.round(availW * RATIO));
-    W = Math.round(H / RATIO);
-    if (W > availW) { W = availW; H = Math.round(W * RATIO); }
-    W = Math.max(240, W);
-    H = Math.round(W * RATIO);
   } else {
-    // 일반 모드
-    const appW = document.getElementById('app')?.clientWidth || vpW;
-    const rawW = wrap.clientWidth || appW;
-    const maxW = rawW - 24;
-    const wrapH = wrap.clientHeight > 60 ? wrap.clientHeight : vpH * 0.65;
-    const maxH = Math.min(wrapH - 8, vpH * 0.58);
-    W = maxW;
-    H = Math.round(W * RATIO);
-    if (maxH > 120 && H > maxH) { H = maxH; W = Math.round(H / RATIO); }
-    W = Math.max(200, W);
-    H = Math.round(W * RATIO);
+    ({ W, H } = computeFieldCanvasSize());
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    fieldSize = { w: W, h: H };
   }
-
-  if (!preserveSize) {
-    canvas.width=W; canvas.height=H;
-    canvas.style.width=W+'px'; canvas.style.height=H+'px';
-    fieldSize={w:W,h:H};
-  }
-
   applyFieldTokenScale(W);
   drawGrass(canvas);
   drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);
 }
 function refreshFieldSlots(highlightSlot, opts) {
-  drawFieldCanvas(highlightSlot, opts);
+  drawFieldCanvas(highlightSlot, { skipResize: true, ...opts });
   repositionFieldTokens();
 }
 function repositionFieldTokens() {
@@ -2950,44 +2971,41 @@ function tokenPos(nx, ny) {
 }
 
 // ── 필드 렌더 ──
-function renderField() {
-  if (document.getElementById('tab-formation')?.classList.contains('active')) {
-    // 캔버스 크기는 이미 결정된 fieldSize 기준으로만 슬롯 마커 재그림
-    // (벤치 높이 변화에 의한 크기 재계산 방지 → 경기장 흔들림 없음)
-    if (fieldSize.w && fieldSize.h) {
-      const canvas = document.getElementById('fieldCanvas');
-      drawGrass(canvas);
-      drawFormationSlots(canvas.getContext('2d'), fieldSize.w, fieldSize.h, slotHighlight);
-    } else {
-      drawFieldCanvas(slotHighlight);
-    }
-  }
-  const td=document.getElementById('tokens');
-  td.innerHTML='';
-  document.getElementById('slotInfo').textContent=fieldTokens.length+'/'+MAX_FIELD;
-  fieldTokens.forEach(t=>{
-    const p=players.find(x=>x.id===t.pid); if(!p) return;
-    // t.pos 우선 (사용자가 명시적으로 지정한 포지션)
-    // t.pos 없으면 슬롯 라벨로 채움 (초기 로드·자동배치 등)
-    const labels=getLabels();
-    const slotLabel=(t.slotIdx>=0&&labels[t.slotIdx])?labels[t.slotIdx]:'';
-    if(!t.pos&&slotLabel) t.pos=slotLabel; // 비어있을 때만 슬롯 라벨로 채움
-    const pos=resolveTokenPos(t,p);
-    const ovr=getOvr(p,pos);
-    const {x,y}=tokenXY(t);
-    const {left,top}=tokenPos(x,y);
-    const el=document.createElement('div');
-    el.className='player-token';
-    el.style.left=left+'px'; el.style.top=top+'px';
-    el.dataset.pid=t.pid;
-
+function paintFieldTokens() {
+  const td = document.getElementById('tokens');
+  if (!td) return;
+  td.innerHTML = '';
+  const slotInfo = document.getElementById('slotInfo');
+  if (slotInfo) slotInfo.textContent = fieldTokens.length + '/' + MAX_FIELD;
+  fieldTokens.forEach(t => {
+    const p = players.find(x => x.id === t.pid);
+    if (!p) return;
+    const labels = getLabels();
+    const slotLabel = (t.slotIdx >= 0 && labels[t.slotIdx]) ? labels[t.slotIdx] : '';
+    if (!t.pos && slotLabel) t.pos = slotLabel;
+    const pos = resolveTokenPos(t, p);
+    const ovr = getOvr(p, pos);
+    const { x, y } = tokenXY(t);
+    const { left, top } = tokenPos(x, y);
+    const el = document.createElement('div');
+    el.className = 'player-token';
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    el.dataset.pid = t.pid;
     el.innerHTML = buildTokenInnerHtml(p, pos, ovr, t.subPid);
-    el.addEventListener('mousedown',onTokenMouseDown);
-    el.addEventListener('touchstart',onTokenTouchStart,{passive:false});
+    el.addEventListener('mousedown', onTokenMouseDown);
+    el.addEventListener('touchstart', onTokenTouchStart, { passive: false });
     td.appendChild(el);
   });
+}
+function renderField() {
+  if (!document.getElementById('tab-formation')?.classList.contains('active')) {
+    renderBench();
+    updateQuarterCopyBtns();
+    return;
+  }
   renderBench();
-  updateQuarterCopyBtns();
+  scheduleFormationLayout(slotHighlight);
 }
 
 // ── 전역 드래그 ──
@@ -3187,9 +3205,9 @@ function applyFormation(){
     const def=slotDefaultXY(i);
     fieldTokens.push({pid:p.id,slotIdx:i,freeX:def.x,freeY:def.y,pos:label||bestPosForSlot(p,label)});
   }
-  // 크기 먼저 확정하고 렌더 (자동배치 후 경기장 크기 재계산 방지)
-  drawFieldCanvas(slotHighlight);
-  saveFieldState();renderField();
+  // 크기는 renderField → scheduleFormationLayout 에서 벤치 후 측정
+  saveFieldState();
+  renderField();
 }
 function clearField(){
   fieldTokens=[];
@@ -3207,7 +3225,7 @@ function toggleAvailFilter() {
       quarterData[q] = { ...(quarterData[q] || {}), formation: quarterData[q]?.formation || '', tokens: [] };
     }
     saveFieldState();
-    drawFieldCanvas(slotHighlight);
+    fieldSize = { w: 0, h: 0 };
     renderField();
     sessionAvailablePids = new Set();
   } else {
@@ -3229,7 +3247,7 @@ function toggleAvailPlayer(pid) {
       fieldTokens = fieldTokens.filter(t => String(t.pid) !== key);
       quarterData[activeQuarter] = { ...(quarterData[activeQuarter] || {}), formation: getFormation(), tokens: [...fieldTokens] };
       saveFieldState();
-      drawFieldCanvas(slotHighlight);
+      fieldSize = { w: 0, h: 0 };
       renderField();
     }
   } else {
@@ -3396,7 +3414,9 @@ function loadSave(id){
   setFormationSelect(qd.formation||'');
   if(qd.formation) reconcileFieldTokensToFormation();
   updateQuarterButtons();
-  drawFieldCanvas();renderField();renderBench();renderFormationSaves();
+  fieldSize = { w: 0, h: 0 };
+  renderField();
+  renderFormationSaves();
   persistField().catch(handleSaveError);
 }
 function deleteSave(id){
@@ -3952,7 +3972,7 @@ function openDisciplineModal(pid) {
   const reasonSel = document.getElementById('disciplineReason');
   const noteInp = document.getElementById('disciplineNote');
   if (!sel) return;
-  const regular = players.filter(p => !p.isMercenary).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99));
+  const regular = players.filter(p => !p.isMercenary).sort((a, b) => jerseySortNum(a.jersey) - jerseySortNum(b.jersey));
   sel.innerHTML = regular.map(p =>
     `<option value="${p.id}">${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`
   ).join('');
@@ -4054,12 +4074,8 @@ function switchTab(tab){
     slotHighlight=-1;
     fieldSize={w:0,h:0};
     renderFormationSaves();
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        drawFieldCanvas(-1);
-        renderField();
-      });
-    });
+    renderBench();
+    scheduleFormationLayout(-1);
   }
   if(tab==='records')renderRecords();
   if(tab==='stats'){switchStatsSub(statsSubTab);}
@@ -4543,7 +4559,7 @@ function openDuesModal(id) {
   const selectedPid = d?.pid != null ? String(d.pid) : '';
   sel.innerHTML =
     '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
-    players.filter(p => !p.isMercenary).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
+    players.filter(p => !p.isMercenary).sort((a, b) => jerseySortNum(a.jersey) - jerseySortNum(b.jersey))
       .map(p => `<option value="${p.id}" ${selectedPid === String(p.id) ? 'selected' : ''}>${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`).join('');
   if (dueType !== DUE_TYPE_OTHER && selectedPid) sel.value = selectedPid;
 
@@ -4774,7 +4790,7 @@ function openBulkDuesModal() {
   document.getElementById('bulkDueDate').value = today;
   document.getElementById('bulkDueAmount').value = document.getElementById('bulkDueAmount').value || '50000';
   const unpaid = players.filter(p => !p.isMercenary && getPaymentStatus(p.id, ym) === 'unpaid')
-    .sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99));
+    .sort((a, b) => jerseySortNum(a.jersey) - jerseySortNum(b.jersey));
   list.innerHTML = unpaid.length
     ? unpaid.map(p => `<label class="bulk-due-row"><input type="checkbox" class="bulk-due-cb" value="${p.id}" checked> ${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</label>`).join('')
     : '<div class="tr-empty">\uBBF8\uB0A9 \uC120\uC218\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
@@ -4825,7 +4841,7 @@ function renderExemptionList() {
   const sel = document.getElementById('exemptPid');
   if (sel) {
     sel.innerHTML = '<option value="">\uC120\uC218 \uC120\uD0DD</option>' +
-      players.filter(p => !p.isMercenary && !isGkOnlyPlayer(p)).sort((a, b) => (a.jersey ?? 99) - (b.jersey ?? 99))
+      players.filter(p => !p.isMercenary && !isGkOnlyPlayer(p)).sort((a, b) => jerseySortNum(a.jersey) - jerseySortNum(b.jersey))
         .map(p => `<option value="${p.id}">${p.jersey != null ? '#' + p.jersey + ' ' : ''}${p.name}</option>`).join('');
   }
 }
@@ -4968,9 +4984,10 @@ function onFieldResize(){
   _fieldResizeTimer = setTimeout(() => {
     if(drag.active&&drag.pid!=null){
       const ft=fieldTokens.find(t=>t.pid===drag.pid);
-      if(ft){const {x,y}=tokenXY(ft);refreshFieldSlots(findNearestSlot(drag.pid,x,y), { preserveSize: true });}
+      if(ft){const {x,y}=tokenXY(ft);refreshFieldSlots(findNearestSlot(drag.pid,x,y));}
     } else {
-      drawFieldCanvas(-1);renderField();
+      fieldSize={w:0,h:0};
+      scheduleFormationLayout(-1);
     }
   }, 80);
 }

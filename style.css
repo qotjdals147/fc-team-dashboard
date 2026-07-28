@@ -278,9 +278,9 @@ body.presentation-mode .field-export-btns { bottom:12px; right:12px; }
 body.presentation-mode .field-export-btn {
   background:rgba(0,0,0,0.55); border-color:rgba(255,255,255,0.4);
 }
-.field-wrap { flex:1; min-height:0; display:flex; justify-content:center; align-items:center; padding:4px 12px; overflow:hidden; }
-.field-inner { position:relative; flex-shrink:0; }
-.field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; }
+.field-wrap { flex:1; min-height:0; display:flex; justify-content:center; align-items:center; padding:4px 8px 8px; overflow:hidden; }
+.field-inner { position:relative; flex-shrink:0; max-width:100%; max-height:100%; }
+.field-canvas { display:block; border-radius:var(--radius-lg); cursor:default; max-width:100%; max-height:100%; }
 #tokens { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
 #tokens .player-token { pointer-events:auto; }
 :root { --tk: 1; }
@@ -349,7 +349,7 @@ body.presentation-mode .field-export-btn {
 }
 .token-sub { font-size:9px; font-weight:600; color:#ffe066; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:5px; margin-top:3px; white-space:nowrap; max-width:64px; overflow:hidden; text-overflow:ellipsis; text-align:center; line-height:1.4; }
 .slot-info { position:absolute; top:10px; right:20px; font-size:11px; color:rgba(255,255,255,0.85); background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; pointer-events:none; }
-.bench-section { padding:7px 12px 9px; border-top:1px solid var(--border); flex-shrink:0; }
+.bench-section { padding:7px 12px 9px; border-top:1px solid var(--border); flex-shrink:0; min-height:52px; box-sizing:border-box; }
 .bench-title { font-size:10px; color:var(--text3); font-weight:500; margin-bottom:5px; }
 .bench-list { display:flex; flex-wrap:wrap; gap:5px; }
 .bench-item { display:flex; align-items:center; gap:4px; }

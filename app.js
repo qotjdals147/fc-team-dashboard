@@ -34,7 +34,15 @@ function stepPresentScale(key, dir) {
   const cur = presentScales[key] || 1;
   presentScales[key] = Math.max(min, Math.min(max, Math.round((cur + dir * step) * 10) / 10));
   applyPresentScales();
-  drawFieldCanvas();
+  if (key === 'token' && fieldSize.w && fieldSize.h) {
+    const canvas = document.getElementById('fieldCanvas');
+    applyFieldTokenScale(fieldSize.w);
+    drawGrass(canvas);
+    drawFormationSlots(canvas.getContext('2d'), fieldSize.w, fieldSize.h, slotHighlight);
+    repositionFieldTokens();
+  } else if (key === 'token') {
+    drawFieldCanvas();
+  }
   updatePresentPanel();
   persistMeta().catch(() => {});
 }
@@ -373,6 +381,18 @@ function formatPlayerValue(wageWon) {
   return val.toLocaleString();
 }
 
+function parseJerseyInput(raw) {
+  const s = String(raw ?? '').trim();
+  if (s === '') return null;
+  const n = parseInt(s, 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+function formatJerseyDisplay(jersey) {
+  if (jersey == null) return '—';
+  return String(jersey);
+}
+
 // ── 수당 기준 (meta.wageRates로 오버라이드 가능) ──
 const WAGE_DEFAULTS = { attendance:50, win:100, cleansheet:150, goal:300, assist:200, bestDef:500, bestDef2:300, mom:500 };
 let wageRates = { ...WAGE_DEFAULTS };
@@ -696,7 +716,7 @@ function switchQuarter(q) {
   }
   updateQuarterButtons();
   updateQuarterCopyBtns();
-  drawFieldCanvas();
+  drawFieldCanvas(undefined, { preserveSize: true });
   renderField();
   renderBench();
   updatePresentPanel();
@@ -717,7 +737,7 @@ function applyQuarterSnapshot(qd) {
   const formation = resolveFormation(qd.formation, fieldTokens);
   setFormationSelect(formation);
   if (formation) reconcileFieldTokensToFormation();
-  drawFieldCanvas();
+  drawFieldCanvas(undefined, { preserveSize: true });
   renderField();
 }
 /** fromQ 라인업 → 다음 쿼터로 복사 (쿼터 탭 전환과 분리, 현재 화면 유지) */
@@ -1160,7 +1180,11 @@ async function bootstrapApp() {
     if (f) saveFormationLocal(f);
     remapTokensToNewFormation();
     slotHighlight = -1;
-    drawFieldCanvas(-1);
+    if (fieldSize.w && fieldSize.h) {
+      drawFieldCanvas(-1, { preserveSize: true });
+    } else {
+      drawFieldCanvas(-1);
+    }
     renderField();
     persistField().catch(handleSaveError);
     // 비관리자용 포메이션 레이블 갱신
@@ -1171,8 +1195,7 @@ async function bootstrapApp() {
   applyAdminMode();
   applyTreasurerMode();
   checkNewNoticeAlert();
-  // 30초마다 자동 갱신 시작
-  startPolling();
+  setupManualDataSync();
 }
 async function persistPlayers() {
   localStorage.setItem('fc_players', JSON.stringify(players));
@@ -1855,7 +1878,7 @@ function renderRoster() {
       const ov = p.ovr?p.ovr[pos]:null;
       return `<span class="ovr-pos-item">${pos}${ov!=null?' '+ov:''}</span>`;
     }).join('');
-    const jersey = p.jersey != null ? p.jersey : '—';
+    const jersey = formatJerseyDisplay(p.jersey);
     const wage = p.isMercenary ? 0 : computePlayerTotalWage(p.id);
     const valueStr = (!p.isMercenary && wage > 0) ? formatPlayerValue(wage) : null;
     const mercenaryBadge = p.isMercenary ? '<span class="mercenary-badge">용병</span>' : '';
@@ -1971,7 +1994,7 @@ function openEditModal(id) {
   editingId=id;
   document.getElementById('modalTitle').textContent='선수 편집';
   document.getElementById('inputName').value=p.name;
-  document.getElementById('inputJersey').value=p.jersey||'';
+  document.getElementById('inputJersey').value = p.jersey != null ? p.jersey : '';
   document.getElementById('inputFormBonus').value=p.formBonus||0;
   updateFormBonusPreview();
   buildPosCheckboxes();
@@ -1989,7 +2012,7 @@ function closeModal() { document.getElementById('playerModal').classList.remove(
 function savePlayer() {
   const name=document.getElementById('inputName').value.trim();
   if(!name){alert('이름을 입력해주세요');return;}
-  const jersey=parseInt(document.getElementById('inputJersey').value)||null;
+  const jersey = parseJerseyInput(document.getElementById('inputJersey').value);
   const positions=ALL_POS.filter(p=>document.getElementById('pcb_'+p)?.checked);
   if (positions.length && !validatePlayerOvrInputs()) return;
   const ovr={};
@@ -2425,7 +2448,14 @@ function findBestSlot(pos, slots, labels, excludePid) {
 }
 
 // ── 필드 캔버스 ──
+const FIELD_SCALE_REF = 340;
 function fieldPad(W) { return Math.max(8, Math.round(W * 16 / 400)); }
+function applyFieldTokenScale(W) {
+  const baseScale = presentMode ? Math.max(0.6, W / FIELD_SCALE_REF) : Math.min(1, Math.max(0.6, W / FIELD_SCALE_REF));
+  const tkScale = presentMode ? baseScale * (presentScales.token || 1) : baseScale;
+  document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
+  return tkScale;
+}
 function getCanvasRect() { return document.getElementById('fieldCanvas').getBoundingClientRect(); }
 function pointerToNorm(clientX, clientY) {
   const cr = getCanvasRect();
@@ -2447,7 +2477,7 @@ function drawFormationSlots(ctx, W, H, nearSlot) {
   if (!document.getElementById('tab-formation')?.classList.contains('active')) return;
   const slots = getSlots(), labels = getLabels();
   const occupied = new Set(fieldTokens.map(t => t.slotIdx).filter(i => i >= 0));
-  const sc = W / 420;
+  const sc = W / FIELD_SCALE_REF;
   const rBase = Math.max(10, 14 * sc);
   const rNear = Math.max(14, 20 * sc);
   slots.forEach((sl, i) => {
@@ -2471,8 +2501,9 @@ function drawFormationSlots(ctx, W, H, nearSlot) {
     }
   });
 }
-function drawFieldCanvas(highlightSlot) {
+function drawFieldCanvas(highlightSlot, opts) {
   if (highlightSlot !== undefined) slotHighlight = highlightSlot;
+  const preserveSize = opts && opts.preserveSize && fieldSize.w && fieldSize.h;
   const canvas=document.getElementById('fieldCanvas');
   const wrap=document.getElementById('fieldWrap');
   const RATIO=1.45;
@@ -2480,7 +2511,10 @@ function drawFieldCanvas(highlightSlot) {
   const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
 
   let W, H;
-  if (presentMode) {
+  if (preserveSize) {
+    W = fieldSize.w;
+    H = fieldSize.h;
+  } else if (presentMode) {
     // 발표 모드: 좌/우 패널(PC 각 210px) 고려해서 필드 너비 계산
     const panelW = vpW >= 600 ? 210 : 0;
     const presentBarH = 36;
@@ -2506,19 +2540,18 @@ function drawFieldCanvas(highlightSlot) {
     H = Math.round(W * RATIO);
   }
 
-  canvas.width=W; canvas.height=H;
-  canvas.style.width=W+'px'; canvas.style.height=H+'px';
-  fieldSize={w:W,h:H};
+  if (!preserveSize) {
+    canvas.width=W; canvas.height=H;
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    fieldSize={w:W,h:H};
+  }
 
-  // 토큰 UI 스케일: 340px 기준, 발표 모드에서는 상한 없이 확대 허용 + 스케일 조절 반영
-  const baseScale = presentMode ? Math.max(0.6, W / 340) : Math.min(1, Math.max(0.6, W / 340));
-  const tkScale = presentMode ? baseScale * (presentScales.token || 1) : baseScale;
-  document.documentElement.style.setProperty('--tk', tkScale.toFixed(3));
+  applyFieldTokenScale(W);
   drawGrass(canvas);
   drawFormationSlots(canvas.getContext('2d'), W, H, slotHighlight);
 }
-function refreshFieldSlots(highlightSlot) {
-  drawFieldCanvas(highlightSlot);
+function refreshFieldSlots(highlightSlot, opts) {
+  drawFieldCanvas(highlightSlot, opts);
   repositionFieldTokens();
 }
 function repositionFieldTokens() {
@@ -4033,9 +4066,7 @@ function switchTab(tab){
   if(tab==='treasurer')renderTreasurer();
 }
 
-// ── 30초 자동 갱신 ──
-const POLL_INTERVAL = 30000;
-
+// ── 탭 갱신 · 동기화 ──
 function isAnyModalOpen() {
   // .modal-bg.open 또는 posPopup.open 여부 확인
   return !!(document.querySelector('.modal-bg.open') || document.getElementById('posPopup')?.classList.contains('open'));
@@ -4064,20 +4095,41 @@ function refreshCurrentTab() {
   }
 }
 
-async function pollRefresh() {
+// ── 수동 동기화 (30초 폴링 제거) ──
+function setupManualDataSync() {
+  setupSyncRefreshButton();
+  if (window.__manualSyncVisibilityBound) return;
+  window.__manualSyncVisibilityBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') manualDataRefresh();
+  });
+}
+
+function setupSyncRefreshButton() {
+  if (document.getElementById('syncRefreshBtn')) return;
+  const actions = document.querySelector('.sync-bar-actions');
+  if (!actions) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'syncRefreshBtn';
+  btn.className = 'btn-sync-refresh';
+  btn.title = '서버에서 다시 불러오기';
+  btn.textContent = '\u21BB';
+  btn.onclick = () => manualDataRefresh();
+  actions.insertBefore(btn, actions.firstChild);
+}
+
+async function manualDataRefresh() {
   if (isAnyModalOpen() || drag.active || isTreasurerTabActive()) return;
   try {
+    updateSyncBar('loading', '불러오는 중...');
     const data = await apiLoadAll(true);
     applyRemoteData(data);
     refreshCurrentTab();
     updateSyncBar('ok', '동기화됨');
-  } catch(e) {
-    // 폴링 실패는 조용히 무시 (사용자에게 alert 없음)
+  } catch (e) {
+    updateSyncBar('error', '불러오기 실패');
   }
-}
-
-function startPolling() {
-  setInterval(pollRefresh, POLL_INTERVAL);
 }
 
 // ════════════════════════════════════════════════════════
@@ -4909,14 +4961,18 @@ document.getElementById('disciplineDetailModal')?.addEventListener('click',funct
 document.getElementById('disciplinePlayer')?.addEventListener('change',updateDisciplineFormHint);
 document.getElementById('disciplineLevel')?.addEventListener('change',function(){this.dataset.userPicked='1';});
 bootstrapApp();
+let _fieldResizeTimer = null;
 function onFieldResize(){
   if(!document.getElementById('tab-formation').classList.contains('active'))return;
-  if(drag.active&&drag.pid!=null){
-    const ft=fieldTokens.find(t=>t.pid===drag.pid);
-    if(ft){const {x,y}=tokenXY(ft);refreshFieldSlots(findNearestSlot(drag.pid,x,y));}
-  } else {
-    drawFieldCanvas(-1);renderField();
-  }
+  clearTimeout(_fieldResizeTimer);
+  _fieldResizeTimer = setTimeout(() => {
+    if(drag.active&&drag.pid!=null){
+      const ft=fieldTokens.find(t=>t.pid===drag.pid);
+      if(ft){const {x,y}=tokenXY(ft);refreshFieldSlots(findNearestSlot(drag.pid,x,y), { preserveSize: true });}
+    } else {
+      drawFieldCanvas(-1);renderField();
+    }
+  }, 80);
 }
 window.addEventListener('resize',onFieldResize);
 if(window.visualViewport)window.visualViewport.addEventListener('resize',onFieldResize);

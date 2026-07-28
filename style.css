@@ -39,6 +39,8 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .sync-bar-actions { display:flex; align-items:center; gap:2px; margin-left:auto; flex-shrink:0; }
 .btn-admin-lock,
 .btn-treasurer-lock { background:none; border:none; cursor:pointer; font-size:18px; padding:6px 10px; color:var(--text3); flex-shrink:0; line-height:1; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.btn-sync-refresh { background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:16px; padding:4px 8px; color:var(--text2); flex-shrink:0; line-height:1.2; touch-action:manipulation; -webkit-tap-highlight-color:transparent; margin-right:2px; }
+.btn-sync-refresh:hover { background:var(--bg3); }
 .btn-admin-lock.active { color:#22c55e; }
 .btn-treasurer-lock.active { color:#f59e0b; }
 /* 포메이션 탭 비관리자용 포메이션 이름 레이블 */

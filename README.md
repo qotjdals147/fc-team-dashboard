@@ -10,7 +10,7 @@
 
 | 폴더 | 내용 |
 |------|------|
-| **`docs/`** | 프로젝트 문서 (`HANDOFF.md`, `BUSINESS_VISION.md` 등) |
+| **`docs/`** | 프로젝트 문서 (`HANDOFF_FC_ZERO.md`, `HANDOFF_PLATFORM.md`, `BUSINESS_VISION.md` 등) |
 | **`docs/legacy/`** | 구 스냅샷 (`SUPABASE_GUIDE.txt`) |
 | **`manual/`** | 업무 매뉴얼 HTML (FC 제로와 별개) |
 | **`setup/`** | Supabase SQL·배포 가이드 |

@@ -267,6 +267,10 @@ function applyAdminMode() {
   // 동적 렌더 요소 재렌더 (편집 버튼 포함 여부 반영)
   renderRoster();
   renderRecords();
+  if (document.getElementById('tab-formation')?.classList.contains('active')) {
+    fieldSize = { w: 0, h: 0 };
+    scheduleFormationLayout(-1);
+  }
 }
 
 function toggleAdminMode() {
@@ -5023,3 +5027,7 @@ function onFieldResize(){
 }
 window.addEventListener('resize',onFieldResize);
 if(window.visualViewport)window.visualViewport.addEventListener('resize',onFieldResize);
+const _fieldInnerEl = document.getElementById('fieldInner');
+if (_fieldInnerEl && typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => onFieldResize()).observe(_fieldInnerEl);
+}

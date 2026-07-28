@@ -2,10 +2,26 @@
 let presentMode = false;
 let presentScales = { token: 1, bench: 1, avail: 1, quarter: 1, panelLeft: 1.2, panelRight: 1 };
 let availPanelCollapsed = false;
+/** 큰 화면: #formationSelect 를 쿼터 버튼 옆 슬롯으로 이동 */
+function mountFormationSelect() {
+  const sel = document.getElementById('formationSelect');
+  const slot = document.getElementById('presentFormationSlot');
+  const toolbar = document.querySelector('.formation-toolbar');
+  if (!sel || !toolbar) return;
+  const label = toolbar.querySelector('label');
+  if (presentMode && slot) {
+    sel.classList.add('formation-select-present');
+    slot.appendChild(sel);
+  } else {
+    sel.classList.remove('formation-select-present');
+    if (label && sel.parentElement !== toolbar) label.insertAdjacentElement('afterend', sel);
+  }
+}
 function togglePresentMode() {
   if (!isAdmin) return;
   presentMode = !presentMode;
   document.body.classList.toggle('presentation-mode', presentMode);
+  mountFormationSelect();
   const btn = document.getElementById('btnPresent');
   if (btn) {
     btn.classList.toggle('active', presentMode);
@@ -4069,8 +4085,9 @@ function switchTab(tab){
   if (presentMode && tab !== 'formation') {
     presentMode = false;
     document.body.classList.remove('presentation-mode');
+    mountFormationSelect();
     const btn = document.getElementById('btnPresent');
-    if (btn) { btn.classList.remove('active'); btn.textContent = '\uD83D\uDDA5\uFE0F \uBC1C\uD45C'; }
+    if (btn) { btn.classList.remove('active'); btn.textContent = '🖥️ 큰 화면'; }
     const ft = document.getElementById('tab-formation');
     if (ft) ft.style.cssText = '';
   }

@@ -256,6 +256,7 @@ body:not(.is-admin) .admin-only { display:none !important; }
 .formation-toolbar { display:flex; align-items:center; gap:6px; padding:7px 10px; border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
 .formation-toolbar label { font-size:12px; color:var(--text2); white-space:nowrap; }
 .formation-select { flex:1; min-width:90px; padding:5px 7px; border:1px solid var(--border2); border-radius:var(--radius); font-size:12px; background:var(--bg); color:var(--text); }
+.formation-select option { color:#1a1a1a; background:#fff; }
 .btn-apply { padding:5px 10px; border:none; border-radius:var(--radius); background:#185FA5; color:#fff; font-size:12px; cursor:pointer; font-weight:600; white-space:nowrap; }
 .btn-reset-field { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); font-size:12px; cursor:pointer; white-space:nowrap; }
 .btn-save-field { padding:5px 8px; border:1px solid var(--border2); border-radius:var(--radius); background:transparent; color:var(--text2); font-size:12px; cursor:pointer; white-space:nowrap; }
@@ -575,25 +576,10 @@ body.presentation-mode .present-bar {
 }
 
 /* 숨길 요소 */
+body.presentation-mode .formation-toolbar,
 body.presentation-mode .formation-saves-panel,
 body.presentation-mode .formation-view-label,
 body.presentation-mode .quarter-bar { display:none !important; }
-
-/* 프레젠테이션: 포메이션 선택만 노출 */
-body.presentation-mode .formation-toolbar {
-  display:flex !important;
-  padding:4px 16px 6px;
-  border-bottom:1px solid rgba(255,255,255,0.12);
-  background:rgba(0,0,0,0.42);
-  flex-shrink:0;
-}
-body.presentation-mode .formation-toolbar label { color:rgba(255,255,255,0.75); }
-body.presentation-mode .formation-toolbar .formation-select {
-  background:rgba(255,255,255,0.1); color:#fff; border-color:rgba(255,255,255,0.25);
-}
-body.presentation-mode .formation-toolbar .btn-apply,
-body.presentation-mode .formation-toolbar .btn-save-field,
-body.presentation-mode .formation-toolbar .btn-reset-field { display:none !important; }
 
 /* 프레젠테이션 중 오늘 멤버 버튼/패널은 숨김 (발표 전 설정 후 진입) */
 body.presentation-mode .avail-btn,
@@ -832,10 +818,37 @@ body.presentation-mode #presentPanelLeft .pp-block-title-row span {
 
 body.presentation-mode #presentQuarterBtns {
   display:flex;
+  align-items:flex-start;
   position:absolute;
   top:10px; left:10px;
   gap:calc(6px * var(--ps-quarter, 1));
   z-index:9010;
+}
+.present-formation-slot { display:none; }
+body.presentation-mode .present-formation-slot {
+  display:flex;
+  align-items:center;
+  margin-left:calc(2px * var(--ps-quarter, 1));
+}
+body.presentation-mode #presentFormationSlot .formation-select,
+body.presentation-mode #presentFormationSlot .formation-select-present {
+  flex:0 0 auto;
+  width:auto;
+  min-width:0;
+  max-width:92px;
+  padding:calc(4px * var(--ps-quarter,1)) calc(8px * var(--ps-quarter,1));
+  font-size:calc(11px * var(--ps-quarter, 1));
+  font-weight:700;
+  border-radius:calc(20px * var(--ps-quarter,1));
+  border:1px solid rgba(255,255,255,0.55);
+  background:rgba(255,255,255,0.94);
+  color:#1a1a1a;
+  box-shadow:0 2px 8px rgba(0,0,0,0.5);
+}
+body.presentation-mode #presentFormationSlot .formation-select option,
+body.presentation-mode #presentFormationSlot .formation-select-present option {
+  color:#1a1a1a;
+  background:#fff;
 }
 body.presentation-mode #presentQuarterBtns .quarter-col {
   gap:calc(3px * var(--ps-quarter, 1));

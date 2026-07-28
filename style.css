@@ -288,7 +288,7 @@ body.presentation-mode .field-canvas { display:block; border-radius:var(--radius
 #tokens { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
 #tokens .player-token { pointer-events:auto; }
 :root { --tk: 1; }
-.player-token { position:absolute; width:calc(64px * var(--tk)); transform:translate(-50%, calc(-28px * var(--tk))); touch-action:none; display:flex; flex-direction:column; align-items:center; user-select:none; z-index:10; cursor:pointer; }
+.player-token { position:absolute; width:calc(64px * var(--tk)); transform:translate(-50%,-50%); touch-action:none; display:flex; flex-direction:column; align-items:center; user-select:none; z-index:10; cursor:pointer; }
 .player-token.dragging { cursor:grabbing; z-index:50; }
 .token-avatar-wrap { position:relative; width:calc(36px * var(--tk)); height:calc(36px * var(--tk)); margin-top:calc(10px * var(--tk)); }
 .token-star-arc { position:absolute; left:50%; top:calc(-17px * var(--tk)); width:calc(54px * var(--tk)); height:calc(20px * var(--tk)); transform:translateX(-50%); pointer-events:none; }

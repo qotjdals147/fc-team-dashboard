@@ -2467,15 +2467,7 @@ function findBestSlot(pos, slots, labels, excludePid) {
 const FIELD_SCALE_REF = 340;
 const FIELD_ASPECT = 1.45;
 const FIELD_EXPORT_RESERVE = 52;
-/** 슬롯 좌표 = 이름 원 중심 (--tk=1 기준 px, style.css transform 과 동기) */
-const TOKEN_CIRCLE_ANCHOR = 28;
 let _formationLayoutRaf = null;
-
-function tokenCircleAnchorPx() {
-  const tk = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tk')) || 1;
-  return TOKEN_CIRCLE_ANCHOR * tk;
-}
-function tokenZIndex(ny) { return 10 + Math.round(ny * 100); }
 
 function fieldPad(W) { return Math.max(8, Math.round(W * 16 / 400)); }
 function applyFieldTokenScale(W) {
@@ -2620,7 +2612,6 @@ function repositionFieldTokens() {
     const { left, top } = tokenPos(x, y);
     el.style.left = left + 'px';
     el.style.top = top + 'px';
-    el.style.zIndex = String(tokenZIndex(y));
   });
 }
 function drawGrass(canvas) {
@@ -2724,8 +2715,8 @@ function drawExportToken(ctx, p, t, cx, cy, tk) {
     subH = subFs + subPadY * 2;
   }
   const totalH = wrapMt + wrapH + (ovr != null ? pillMt + pillH : 0) + (subText ? subMt + subH : 0);
-  const circleCy = cy;
-  const wrapTop = circleCy - wrapH / 2;
+  const wrapTop = cy - totalH / 2 + wrapMt;
+  const circleCy = wrapTop + wrapH / 2;
 
   ctx.save();
   ctx.textAlign = 'center';
@@ -2914,7 +2905,7 @@ function renderFormationExportCanvas(q) {
   ctx.save();
   canvasRoundRect(ctx, pad, fieldY, fieldW, fieldH, cornerR);
   ctx.clip();
-  tokens.slice().sort((a, b) => tokenXYForExport(a, slots).y - tokenXYForExport(b, slots).y).forEach(t => {
+  tokens.forEach(t => {
     const p = players.find(x => x.id === t.pid);
     if (!p) return;
     const slotLabel = (t.slotIdx >= 0 && labels[t.slotIdx]) ? labels[t.slotIdx] : '';
@@ -3005,8 +2996,7 @@ function tokenPos(nx, ny) {
   const cr = getCanvasRect();
   const inner = document.getElementById('fieldInner').getBoundingClientRect();
   const { x, y } = normToCanvasPx(nx, ny, cr.width, cr.height);
-  const anchor = tokenCircleAnchorPx();
-  return { left: cr.left - inner.left + x, top: cr.top - inner.top + y - anchor };
+  return { left: cr.left - inner.left + x, top: cr.top - inner.top + y };
 }
 
 // ── 필드 렌더 ──
@@ -3016,7 +3006,7 @@ function paintFieldTokens() {
   td.innerHTML = '';
   const slotInfo = document.getElementById('slotInfo');
   if (slotInfo) slotInfo.textContent = fieldTokens.length + '/' + MAX_FIELD;
-  fieldTokens.slice().sort((a, b) => tokenXY(a).y - tokenXY(b).y).forEach(t => {
+  fieldTokens.forEach(t => {
     const p = players.find(x => x.id === t.pid);
     if (!p) return;
     const labels = getLabels();
@@ -3030,7 +3020,6 @@ function paintFieldTokens() {
     el.className = 'player-token';
     el.style.left = left + 'px';
     el.style.top = top + 'px';
-    el.style.zIndex = String(tokenZIndex(y));
     el.dataset.pid = t.pid;
     el.innerHTML = buildTokenInnerHtml(p, pos, ovr, t.subPid);
     el.addEventListener('mousedown', onTokenMouseDown);

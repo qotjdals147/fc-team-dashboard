@@ -1,0 +1,27 @@
+-- [선택 · User 미결] 과거 lineup/subs JSON pid 재사용 정리 — 역사 기록 정확도용
+-- 2026-09-04 인수인계
+--
+-- **현재 운영**: 코드(resolveScorerPlayerId + matchParticipantPids)만으로 통계·수당은 안전.
+-- **이 SQL**: DB 원본 lineup을 고쳐 용민 등 정회원의 과거 출석이 roster에 다시 잡히게 함.
+-- User가 「역사 기록 맞추기」 결정 후, setup/audit-attendance-pid-recycle.mjs 출력 기준으로 케이스별 적용.
+--
+-- 예시 (2026-07-12 언더브릿지 — scorer와 동일 경기):
+--   lineup 내 pid 29 name 「용민(용)」→ pid 11 name 「용민」
+--
+-- ⚠️ 일괄 자동 UPDATE는 권장하지 않음 — 경기·행마다 수동 검토 후 RUN.
+
+-- UPDATE matches
+-- SET lineup = (
+--   SELECT COALESCE(
+--     jsonb_agg(
+--       CASE
+--         WHEN (elem->>'pid')::bigint = 29 AND elem->>'name' = '용민(용)'
+--           THEN jsonb_set(jsonb_set(elem, '{pid}', '11'), '{name}', '"용민"')
+--         ELSE elem
+--       END
+--     ),
+--     '[]'::jsonb
+--   )
+--   FROM jsonb_array_elements(lineup) AS elem
+-- )
+-- WHERE id = 1783869924827 AND date = '2026-07-12';

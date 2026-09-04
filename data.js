@@ -325,10 +325,16 @@ function matchResult(m) {
   if (m.scoreUs === m.scoreOpp) return 'D';
   return 'L';
 }
-function matchParticipantPids(m) {
+function matchParticipantPids(m, players) {
   const pids = new Set();
-  (m.lineup || []).forEach(l => { if (l.pid != null) pids.add(l.pid); });
-  (m.subs || []).forEach(s => { if (s.pid != null) pids.add(s.pid); });
+  const roster = players || [];
+  const add = row => {
+    if (!row || row.pid == null) return;
+    const pid = roster.length ? resolveScorerPlayerId(row, roster) : row.pid;
+    if (pid != null) pids.add(pid);
+  };
+  (m.lineup || []).forEach(add);
+  (m.subs || []).forEach(add);
   return pids;
 }
 function getMatchYears(matches) {
@@ -343,6 +349,37 @@ function filterMatchesByVenue(matches, venue) {
   if (!venue || venue === 'all') return matches;
   return matches.filter(m => m.homeAway === venue);
 }
+
+/** 경기 기록 scorer.name 의 「(용)」 용병 슬롯 접미사 제거 */
+function scorerBaseName(name) {
+  if (name == null) return '';
+  return String(name).replace(/\(용\)\s*$/u, '').trim();
+}
+
+/** scorer 행의 name ↔ 현재 players.name (또는 (용) 제거 후) 일치 여부 */
+function scorerNameMatchesPlayer(scorerName, playerName) {
+  if (!scorerName || !playerName) return true;
+  const a = scorerBaseName(scorerName);
+  const b = scorerBaseName(playerName);
+  return a === b || a === playerName || b === scorerName;
+}
+
+/**
+ * pid 재사용(용병 슬롯 → 신규 정회원) 후에도 통계·수당이 올바른 선수에게 귀속되도록 pid 해석.
+ * scorer · lineup · subs 공통 ({ pid, name } 행)
+ */
+function resolveScorerPlayerId(row, players) {
+  if (!row || row.pid == null) return null;
+  const byPid = players.find(p => p.id === row.pid);
+  if (byPid && scorerNameMatchesPlayer(row.name, byPid.name)) return byPid.id;
+  // pid 재사용 + 「(용)」 용병 슬롯: 현 roster 주인과 다르면 과거 용병 전용 (이름 우연 일치 방지 — 근찬(용)≠정회원 근찬)
+  if (/\(용\)\s*$/u.test(String(row.name || ''))) return null;
+  const base = scorerBaseName(row.name);
+  if (!base) return null;
+  const byName = players.find(p => p.name === base || scorerBaseName(p.name) === base);
+  return byName ? byName.id : null;
+}
+
 function computePlayerStats(matches, players) {
   const map = {};
   players.forEach(p => {
@@ -351,11 +388,12 @@ function computePlayerStats(matches, players) {
   });
   matches.forEach(m => {
     // 출석: 선발 + 교체 투입 + 교체 후보(subPid 등록 선수) 모두 포함
-    matchParticipantPids(m).forEach(pid => { if (map[pid]) map[pid].attendance++; });
+    matchParticipantPids(m, players).forEach(pid => { if (map[pid]) map[pid].attendance++; });
     (m.scorers || []).forEach(s => {
-      if (!map[s.pid]) return;
-      map[s.pid].goals += s.goals || 0;
-      map[s.pid].assists += s.assists || 0;
+      const pid = resolveScorerPlayerId(s, players);
+      if (pid == null || !map[pid]) return;
+      map[pid].goals += s.goals || 0;
+      map[pid].assists += s.assists || 0;
     });
     if (m.mom != null && map[m.mom]) map[m.mom].mom++;
   });
@@ -411,15 +449,18 @@ function computeStreaks(matches) {
   });
   return best;
 }
-function getPlayerStatHistory(matches, pid, type) {
+function getPlayerStatHistory(matches, pid, type, players) {
+  const roster = players || [];
   return matches
-    .filter(m => (m.scorers || []).some(s => s.pid === pid && (type === 'goals' ? (s.goals || 0) > 0 : (s.assists || 0) > 0)))
-    .map(m => {
-      const s = m.scorers.find(x => x.pid === pid);
-      return {
+    .flatMap(m => (m.scorers || [])
+      .filter(s => {
+        const resolved = roster.length ? resolveScorerPlayerId(s, roster) : s.pid;
+        if (resolved !== pid) return false;
+        return type === 'goals' ? (s.goals || 0) > 0 : (s.assists || 0) > 0;
+      })
+      .map(s => ({
         date: normalizeDate(m.date), oppTeam: m.oppTeam, scoreUs: m.scoreUs, scoreOpp: m.scoreOpp,
         count: type === 'goals' ? (s.goals || 0) : (s.assists || 0),
-      };
-    })
+      })))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }

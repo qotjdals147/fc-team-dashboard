@@ -450,20 +450,23 @@ function computeMatchWages(match) {
   const result = {};
   const win = match.scoreUs > match.scoreOpp;
   const clean = match.scoreOpp === 0;
-  const allPids = [
-    ...(match.lineup || []).map(x => ({pid:x.pid, pos:x.pos, type:'field'})),
-    ...(match.subs   || []).map(x => ({pid:x.pid, pos:x.pos, type:'sub'})),
+  const allRows = [
+    ...(match.lineup || []).map(x => ({ ...x, type: 'field' })),
+    ...(match.subs || []).map(x => ({ ...x, type: 'sub' })),
   ];
-  allPids.forEach(({pid, pos, type}) => {
-    if (!pid) return;
-    // 용병은 수당 지급 제외
+  const seen = new Set();
+  allRows.forEach(row => {
+    const pid = resolveScorerPlayerId(row, players);
+    if (pid == null || seen.has(pid)) return;
+    seen.add(pid);
     const _plyr = players.find(p => p.id == pid);
     if (_plyr?.isMercenary) return;
+    const pos = row.pos;
     const items = [];
     items.push({ label:'&#xCD9C;&#xC11D;', amount: wageRates.attendance });
     if (win) items.push({ label:'&#xC2B9;&#xB9AC;', amount: wageRates.win });
     if (clean && DEF_POSITIONS.has(pos)) items.push({ label:'&#xD074;&#xB9B0;&#xC2DC;&#xD2B8;', amount: wageRates.cleansheet });
-    const scorer = (match.scorers || []).find(s => s.pid == pid);
+    const scorer = (match.scorers || []).find(s => resolveScorerPlayerId(s, players) === pid);
     if (scorer?.goals)   items.push({ label:`&#xACE8;${scorer.goals>1?'&times;'+scorer.goals:''}`, amount: wageRates.goal * scorer.goals });
     if (scorer?.assists) items.push({ label:`&#xC5B4;&#xC2DC;${scorer.assists>1?'&times;'+scorer.assists:''}`, amount: wageRates.assist * scorer.assists });
     if (match.bestDef  == pid) items.push({ label:'&#xBCA0;&#xC2A4;&#xD2B8;&#xC218;&#xBE44;', amount: wageRates.bestDef });
@@ -3898,7 +3901,7 @@ function openStatHistory(pid, type) {
   const p = players.find(x => x.id === pid);
   const year = document.getElementById('statsYearFilter')?.value || 'ALL';
   const filtered = filterMatchesByYear(matches, year);
-  const history = getPlayerStatHistory(filtered, pid, type);
+  const history = getPlayerStatHistory(filtered, pid, type, players);
   if (!history.length) return;
   const label = type === 'goals' ? '골' : '어시스트';
   document.getElementById('statHistoryTitle').textContent = `${p?.name || ''} — ${label} 히스토리`;
